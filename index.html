@@ -26,10 +26,11 @@ body.idle{ cursor:none; }
 svg{ display:block; }
 
 #app{
-  display:grid; width:100%; height:100%; padding:.8rem 1.1rem; gap:.65rem;
-  grid-template-columns:1.5fr 1fr;
+  display:grid; width:100%; height:100%; gap:.65rem;
+  padding:.8rem 1.1rem 3.9rem;          /* 아래 여백 = 고정 일정 띠 자리 */
+  grid-template-columns:1fr 1fr;        /* 급식 : 이번 주 = 5 : 5 */
   grid-template-rows:auto auto minmax(0,1fr) auto;
-  grid-template-areas:"head head" "line line" "meal side" "note note";
+  grid-template-areas:"head head" "line line" "meal week" "note note";
 }
 #app > *{ min-width:0; min-height:0; }
 
@@ -39,19 +40,21 @@ svg{ display:block; }
 .head .room{ display:flex; align-items:center; gap:.5rem;
   font-size:2rem; font-weight:900; letter-spacing:-.02em; }
 .head .room svg{ width:1.7rem; height:1.7rem; color:var(--soft); }
+.head .now{ display:flex; align-items:baseline; gap:.5rem; }
+.head .nowlabel{ font-size:1.05rem; font-weight:800; color:var(--soft); }
 .head .clock{ font-size:3rem; font-weight:900; letter-spacing:-.035em;
   font-variant-numeric:tabular-nums; line-height:1; }
 .head .nav{ display:flex; align-items:center; gap:.4rem; }
 .head .date{ font-size:1.45rem; font-weight:800; color:var(--soft);
-  min-width:7.6rem; text-align:right; }
+  min-width:8rem; text-align:center; padding:.14rem .5rem; border-radius:.35rem; }
+.head .date.preview{ color:#7A4B00; background:#FFE9B8; }
 .navbtn{ display:grid; place-items:center; width:2.1rem; height:2.1rem;
   border-radius:.5rem; border:.09rem solid var(--line); background:var(--card);
   color:var(--soft); cursor:pointer; }
 .navbtn svg{ width:1.1rem; height:1.1rem; }
 .navbtn:hover,.navbtn:focus-visible{ color:var(--ink); border-color:var(--soft); outline:none; }
 .navbtn.today{ width:auto; padding:0 .8rem; font:inherit; font-size:1.05rem; font-weight:900; }
-.preview{ font-size:1.05rem; font-weight:900; color:#7A4B00;
-  background:#FFE9B8; padding:.16rem .6rem; border-radius:.3rem; }
+.navbtn.today[data-off]{ visibility:hidden; }   /* 자리는 지키고 모습만 감춤 */
 
 /* ── 카드 공통 ─────────────────────────────────────────── */
 .card{ background:var(--card); border:.09rem solid var(--line);
@@ -107,23 +110,30 @@ svg{ display:block; }
 .mealcard li::before{ content:''; width:.36rem; height:.36rem; border-radius:50%;
   background:var(--meal); flex:0 0 auto; }
 
-/* ── 오른쪽 : 일정 + 이번 주 ───────────────────────────── */
-.side{ grid-area:side; display:flex; flex-direction:column; gap:.65rem; }
-.calcard{ flex:0 0 auto; }
-.calcard ul{ list-style:none; display:flex; flex-direction:column; gap:.32rem; }
-.calcard li{ display:flex; align-items:center; gap:.6rem; font-size:1.55rem; font-weight:800;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.dday{ flex:0 0 auto; min-width:3.8rem; text-align:center; font-size:1.1rem; font-weight:900;
+/* ── 하단 고정 띠 : 다가오는 일정 (항상 화면 맨 아래) ──── */
+.calbar{
+  position:fixed; left:0; right:0; bottom:0; z-index:5;
+  display:flex; align-items:center; gap:1rem;
+  padding:.4rem 1.3rem; height:3.4rem;
+  background:var(--card); border-top:.09rem solid var(--line);
+  box-shadow:0 -.35rem 1.1rem rgba(17,28,51,.07);
+}
+.calbar .ct{ margin:0; flex:0 0 auto; }
+.calbar ul{ list-style:none; display:flex; gap:1.6rem; flex:1 1 auto; overflow:hidden; }
+.calbar li{ display:flex; align-items:center; gap:.5rem;
+  font-size:1.5rem; font-weight:800; white-space:nowrap; }
+.dday{ flex:0 0 auto; min-width:3.6rem; text-align:center; font-size:1.05rem; font-weight:900;
   color:#fff; background:var(--cal); padding:.14rem .45rem; border-radius:.3rem;
   font-variant-numeric:tabular-nums; }
 .dday.far{ background:#EDF2F8; color:var(--soft); }
 
-.weekcard{ flex:1 1 auto; min-height:0; overflow:hidden; }
+/* ── 이번 주 : 오른쪽 칸 전체 ──────────────────────────── */
+.weekcard{ grid-area:week; min-height:0; overflow:hidden; }
 .weekcard table{ width:100%; border-collapse:collapse; table-layout:fixed;
-  font-size:.95rem; font-weight:700; }
-.weekcard th{ font-size:.92rem; font-weight:900; color:var(--soft); padding:0 0 .18rem; }
+  font-size:1.35rem; font-weight:700; }
+.weekcard th{ font-size:1.2rem; font-weight:900; color:var(--soft); padding:0 0 .3rem; }
 .weekcard th.today{ color:var(--ink); }
-.weekcard td{ text-align:center; padding:.09rem .04rem; border-top:1px solid #EFF3F9;
+.weekcard td{ text-align:center; padding:.28rem .05rem; border-top:1px solid #EFF3F9;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#7C8AA3; }
 .weekcard col.today{ background:#F3F7FD; }
 .weekcard td.today{ font-weight:900; }
@@ -164,13 +174,15 @@ svg{ display:block; }
 <div id="app">
   <header class="head">
     <div class="room"><span id="roomIcon"></span><span id="room">—</span></div>
-    <div class="clock" id="clock">--:--</div>
+    <div class="now">
+      <span class="nowlabel">현재 시각</span>
+      <span class="clock" id="clock">--:--</span>
+    </div>
     <div class="nav">
-      <span class="preview" id="preview" hidden>미리보기</span>
+      <button class="navbtn today" id="goToday" data-off>오늘</button>
       <button class="navbtn" id="prevDay" aria-label="이전 날짜"></button>
       <div class="date" id="date">—</div>
       <button class="navbtn" id="nextDay" aria-label="다음 날짜"></button>
-      <button class="navbtn today" id="goToday" hidden>오늘</button>
     </div>
   </header>
 
@@ -184,18 +196,17 @@ svg{ display:block; }
     <div id="mealBody"><div class="none">불러오는 중</div></div>
   </section>
 
-  <div class="side">
-    <section class="card calcard">
-      <div class="ct o" id="calTitle"></div>
-      <div id="calBody"></div>
-    </section>
-    <section class="card weekcard">
-      <div class="ct" id="weekTitle"></div>
-      <div id="weekBody"></div>
-    </section>
-  </div>
+  <section class="card weekcard">
+    <div class="ct" id="weekTitle"></div>
+    <div id="weekBody"></div>
+  </section>
 
   <div class="note" id="note"></div>
+</div>
+
+<div class="calbar">
+  <div class="ct o" id="calTitle"></div>
+  <div id="calBody"></div>
 </div>
 
 <div id="stale">연결 끊김 — 마지막 정보 표시 중</div>
@@ -361,8 +372,9 @@ function renderDate(){
   document.getElementById('date').textContent =
     Number(d.slice(4,6)) + '월 ' + Number(d.slice(6,8)) + '일 ' + DATA.weekday + '요일';
   const on = isPreview();
-  document.getElementById('preview').hidden = !on;
-  document.getElementById('goToday').hidden = !on;
+  document.getElementById('date').classList.toggle('preview', on);
+  const btn = document.getElementById('goToday');
+  if (on) btn.removeAttribute('data-off'); else btn.setAttribute('data-off', '');
   document.querySelector('#lineTitle span').textContent = on ? '시간표' : '오늘 시간표';
 }
 
