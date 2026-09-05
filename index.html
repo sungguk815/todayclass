@@ -369,6 +369,13 @@ function armReturn(){
 
 function isPreview(){ return !!VIEW_DATE && VIEW_DATE !== todayYmd(); }
 
+/** 빈 상태 문구 앞에 붙일 말 — 어느 날짜 이야기인지 분명히 한다 */
+function emptyWord(){
+  if (!isPreview()) return '오늘은';
+  const d = (DATA && DATA.date) || VIEW_DATE;
+  return Number(d.slice(4,6)) + '월 ' + Number(d.slice(6,8)) + '일은';
+}
+
 function bindIdleCursor(){
   let t = null;
   const hide = () => document.body.classList.add('idle');
@@ -431,8 +438,9 @@ function renderMeal(){
   const box = document.getElementById('mealBody');
   const m = DATA.meal;
 
-  if (!m || !m.ok || !m.value || !m.value.length){
-    box.innerHTML = '<div class="none">오늘은 급식이 없습니다</div>';
+  if (m && !m.ok){ box.innerHTML = '<div class="none">급식을 불러오지 못했습니다</div>'; return; }
+  if (!m || !m.value || !m.value.length){
+    box.innerHTML = '<div class="none">' + emptyWord() + ' 급식 정보가 없습니다</div>';
     return;
   }
 
@@ -448,8 +456,9 @@ function renderTimetable(){
   const box = document.getElementById('ttBody');
   const t = DATA.timetable;
 
-  if (!t || !t.ok || !t.value || !t.value.length){
-    box.innerHTML = '<div class="none">오늘은 수업이 없습니다</div>';
+  if (t && !t.ok){ box.innerHTML = '<div class="none">시간표를 불러오지 못했습니다</div>'; return; }
+  if (!t || !t.value || !t.value.length){
+    box.innerHTML = '<div class="none">' + emptyWord() + ' 시간표가 없습니다</div>';
     return;
   }
 
@@ -479,11 +488,11 @@ function renderCalendar(){
 
   const list = s.value
     .filter(e => !HIDE_EVENTS.some(k => e.name.indexOf(k) >= 0))
-    .filter(e => e.dday >= 0)
+    .filter(e => isPreview() ? true : e.dday >= 0)
     .slice(0, MAX_CAL);
 
   if (!list.length){
-    box.innerHTML = '<ul><li class="none">2주 내 예정된 일정이 없습니다</li></ul>';
+    box.innerHTML = '<ul><li class="none">예정된 일정이 없습니다</li></ul>';
     return;
   }
 
