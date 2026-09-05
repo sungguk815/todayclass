@@ -110,7 +110,7 @@ svg{ display:block; }
 .mealcard li::before{ content:''; width:.3rem; height:.3rem; border-radius:50%;
   background:var(--meal); flex:0 0 auto; }
 .mealcard .menu{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:.35rem; }
-.mealcard .allergy{
+.mealcard .nutrition{
   font-size:.92rem; font-weight:700; color:var(--soft); line-height:1.35;
   letter-spacing:-.01em;
 }
@@ -266,12 +266,6 @@ const SUBJECT_COLORS = [
   [['진로','진탐','주제','행복','창체','자율','동아리','봉사'], '#7688A3']
 ];
 const FALLBACK_COLOR = '#7688A3';
-const ALLERGY_NAMES = {
-  '1':'난류', '2':'우유', '3':'메밀', '4':'땅콩', '5':'대두', '6':'밀',
-  '7':'고등어', '8':'게', '9':'새우', '10':'돼지고기', '11':'복숭아', '12':'토마토',
-  '13':'아황산류', '14':'호두', '15':'닭고기', '16':'쇠고기', '17':'오징어',
-  '18':'조개류', '19':'잣'
-};
 
 function subjectColor(name){
   const s = String(name || '');
@@ -462,30 +456,20 @@ function renderMeal(){
   const items = dishes.map(function(x){
     return '<li>' + esc(String(x.name || '').replace(/\*+$/, '')) + '</li>';
   }).join('');
-  const allergyNote = formatAllergyNote(dishes);
+  const nutritionNote = formatNutritionNote(lunch.nutrition);
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
   const photo = photoUrl
     ? '<div class="shotbox"><img src="' + esc(photoUrl) + '" alt="급식 사진" onerror="mealPhotoFallback(this)"></div>'
     : '<div class="shotbox"><div class="empty">이미지가 없습니다</div></div>';
   box.innerHTML = '<div class="row"><div class="menu"><ul>' + items + '</ul>'
-                + (allergyNote ? '<div class="allergy">' + esc(allergyNote) + '</div>' : '')
+                + (nutritionNote ? '<div class="nutrition">' + esc(nutritionNote) + '</div>' : '')
                 + '</div>' + photo + '</div>';
 }
-function formatAllergyNote(dishes){
-  const seen = {};
-  const codes = [];
-  (dishes || []).forEach(function(dish){
-    (dish.allergy || []).forEach(function(code){
-      const key = String(code);
-      if (!key || seen[key]) return;
-      seen[key] = true;
-      codes.push(key);
-    });
-  });
-  if (!codes.length) return '';
-  codes.sort(function(a, b){ return Number(a) - Number(b); });
-  return '알레르기: ' + codes.map(function(code){
-    return code + '.' + (ALLERGY_NAMES[code] || '기타');
+function formatNutritionNote(list){
+  if (!list || !list.length) return '';
+  return list.map(function(item){
+    const unit = item.unit ? item.unit : '';
+    return item.name + ' ' + item.value + unit;
   }).join(' · ');
 }
 function mealPhotoFallback(img){
