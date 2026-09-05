@@ -1,1011 +1,592 @@
-/**
- * ============================================================
- *  오늘의 교실 - 교실 전자칠판 대시보드 백엔드 API
- *  동국대학교사범대학부속중학교
- * ------------------------------------------------------------
- *  역할
- *   1) 나이스 OpenAPI 프록시 (인증키 은닉 + 캐싱)
- *   2) 시간표 = 나이스 기본골격 + '시간표보정' 시트 덮어쓰기
- *   3) 담임/전교 공지 저장·조회
- *   4) 대시보드가 한 번의 호출로 전부 받아가는 /all 엔드포인트
- * ------------------------------------------------------------
- *  최초 설정 순서는 파일 맨 아래 [설치 안내] 참고
- * ============================================================
- */
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오늘의 교실</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.css">
+<style>
+:root{
+  --bg:#EEF3F9; --card:#FFFFFF; --ink:#111C33; --soft:#6E7E99;
+  --line:#DFE7F1; --note:#E11D48; --cal:#F0821E; --meal:#12A150;
+  --r-hero:1.1rem; --r-card:.75rem;
+}
 
-// ────────────────────────────────────────────────────────────
-// 설정
-// ────────────────────────────────────────────────────────────
-const CONFIG = {
-  APP_NAME    : '오늘의 교실',
-  APP_TAGLINE : '오늘 뭐 있지?',
+/* 전체 크기 손잡이 — 작으면 72를 줄이세요 */
+html{ font-size:calc(100vw / 72); }
 
-  SCHOOL_NAME : '동국대학교사범대학부속중학교',
-  ATPT_CODE   : 'B10',        // 서울특별시교육청
-  SCHOOL_KIND : '중학교',
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{
+  width:100vw; height:100vh; overflow:hidden; background:var(--bg); color:var(--ink);
+  font-family:Pretendard,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+  font-weight:600; -webkit-font-smoothing:antialiased; cursor:default; user-select:none;
+}
+body.idle{ cursor:none; }
+[hidden]{ display:none !important; }
+svg{ display:block; }
 
-  // 급식은 부속고 코드로 등록됨 (중·고 급식실 공유)
-  MEAL_SCHUL_CODE : '7010151',
+#app{
+  display:grid; width:100%; height:100%; gap:.65rem;
+  padding:.8rem 1.1rem 3.9rem;          /* 아래 여백 = 고정 일정 띠 자리 */
+  grid-template-columns:1fr 1fr;        /* 급식 : 주간 시간표 */
+  grid-template-rows:auto auto minmax(0,1fr) auto;
+  grid-template-areas:"head head" "line line" "meal week" "note note";
+}
+#app > *{ min-width:0; min-height:0; }
 
-  // 학교 홈페이지 급식 페이지 (식단 사진의 첨부파일 번호를 여기서 찾는다)
-  MEAL_PHOTO_PAGE : 'https://dongguk.sen.ms.kr/75702/subMenu.do',
-  MEAL_PHOTO_BASE : 'https://dongguk.sen.ms.kr/dggb/module/file/selectImageView.do?atchFileId=',
+/* ── 머리말 ────────────────────────────────────────────── */
+.head{ grid-area:head; display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:0 .3rem; }
+.head .room{ display:flex; align-items:center; gap:.5rem;
+  font-size:2rem; font-weight:900; letter-spacing:-.02em; }
+.head .room svg{ width:1.7rem; height:1.7rem; color:var(--soft); }
+.head .now{ display:flex; align-items:baseline; gap:.5rem; }
+.head .nowlabel{ font-size:1.05rem; font-weight:800; color:var(--soft); }
+.head .clock{ font-size:3rem; font-weight:900; letter-spacing:-.035em;
+  font-variant-numeric:tabular-nums; line-height:1; }
+.head .nav{ display:flex; align-items:center; gap:.4rem; }
+.head .navlabel{ font-size:1.05rem; font-weight:800; color:var(--soft); margin-right:.15rem;
+  white-space:nowrap; }
+.head .date{ font-size:1.45rem; font-weight:800; color:var(--soft);
+  min-width:8rem; text-align:center; padding:.14rem .5rem; border-radius:.35rem; }
+.head .date.preview{ color:#7A4B00; background:#FFE9B8; }
+.navbtn{ display:grid; place-items:center; width:2.1rem; height:2.1rem;
+  border-radius:.5rem; border:.09rem solid var(--line); background:var(--card);
+  color:var(--soft); cursor:pointer; }
+.navbtn svg{ width:1.1rem; height:1.1rem; }
+.navbtn:hover,.navbtn:focus-visible{ color:var(--ink); border-color:var(--soft); outline:none; }
+.navbtn.today{ width:auto; padding:0 .8rem; font:inherit; font-size:1.05rem; font-weight:900; }
+.navbtn.today[data-off]{ visibility:hidden; }   /* 자리는 지키고 모습만 감춤 */
 
-  // 컴시간 학교코드 + 실시간 시간표 패널 URL (프런트 WebView가 그대로 로드)
-  COMCIGAN_CODE : '17652',
-  COMCIGAN_URL  : 'https://timetable.s2h9.dev/?sc=17652',
+/* ── 카드 공통 ─────────────────────────────────────────── */
+.card{ background:var(--card); border:.09rem solid var(--line);
+  border-radius:var(--r-card); padding:.75rem .9rem; display:flex; flex-direction:column; }
+.ct{ display:flex; align-items:center; gap:.42rem; margin-bottom:.55rem;
+  font-size:1.22rem; font-weight:900; color:var(--soft); }
+.ct svg{ width:1.25rem; height:1.25rem; }
+.ct.g{ color:var(--meal); } .ct.o{ color:var(--cal); } .ct.r{ color:var(--note); }
+.none{ font-size:1.5rem; font-weight:700; color:var(--soft); }
 
-  // 학급 구성 (2026학년도 기준 총 20학급)
-  CLASS_STRUCTURE : { 1: 7, 2: 7, 3: 6 },
+/* ── 주인공 : 오늘 시간표 타임라인 ─────────────────────── */
+.line{
+  grid-area:line; background:var(--card); border-radius:var(--r-hero);
+  box-shadow:0 .5rem 1.6rem rgba(17,28,51,.10);
+  padding:.8rem .9rem .9rem;
+}
+.line .ct{ margin-bottom:.6rem; }
+.slots{ display:flex; gap:.42rem; align-items:stretch; }
+.slot{
+  flex:1 1 0; min-width:0; border-radius:.6rem; padding:.5rem .45rem .6rem;
+  background:#F6F9FD; border-top:.32rem solid var(--c);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.12rem;
+  transition:flex-grow .3s ease;
+}
+.slot .p{ font-size:1.05rem; font-weight:900; color:var(--soft); }
+.slot .s{ font-size:2.1rem; font-weight:900; letter-spacing:-.03em; color:var(--c);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.slot.done{ background:#F2F5F9; border-top-color:#D5DEEA; }
+.slot.done .s{ color:#A9B6C9; } .slot.done .p{ color:#BCC7D6; }
 
-  // 시간표는 컴시간을 우선 조회하고, 실패하면 나이스로 자동 전환한다.
-  // Worker 배포 주소는 스크립트 속성 COMCIGAN_API_URL에 저장한다.
-  TIMETABLE_SOURCE   : 'comcigan',
-  TIMETABLE_EXT_URL  : '',
+.slot.on{
+  flex:1.9 1 0; background:var(--c); border-top-color:var(--c);
+  box-shadow:0 .3rem .9rem color-mix(in srgb, var(--c) 40%, transparent);
+}
+.slot.on .p{ color:rgba(255,255,255,.82); font-size:1.15rem; }
+.slot.on .s{ color:#fff; font-size:3.3rem; }
+.slot.on .left{ font-size:1.2rem; font-weight:800; color:rgba(255,255,255,.9); }
+.slot .chg{ font-size:.92rem; font-weight:900; color:#fff; background:var(--note);
+  padding:.05rem .38rem; border-radius:.25rem; }
+.slot .bar{ width:82%; height:.22rem; border-radius:.11rem;
+  background:rgba(255,255,255,.32); overflow:hidden; margin-top:.18rem; }
+.slot .bar > i{ display:block; height:100%; background:#fff; width:0; transition:width .9s linear; }
 
-  // 시트 이름
-  SHEET_NOTICE    : '공지',
-  SHEET_TIMETABLE : '시간표보정',
-  SHEET_LOG       : '로그',
+/* ── 급식 ──────────────────────────────────────────────── */
+.mealcard{ grid-area:meal; }
+.mealcard .row{ display:flex; gap:.75rem; align-items:stretch; flex:1 1 auto; min-height:0; }
+.mealcard ul{ list-style:none; display:flex; flex-wrap:wrap; gap:.12rem 1rem;
+  align-content:flex-start; flex:1 1 auto; min-width:0; }
+.mealcard li{ display:flex; align-items:center; gap:.36rem;
+  font-size:1.35rem; font-weight:800; line-height:1.25; }
+.mealcard li::before{ content:''; width:.3rem; height:.3rem; border-radius:50%;
+  background:var(--meal); flex:0 0 auto; }
+.mealcard .shotbox{
+  flex:0 0 11rem; width:11rem; min-height:8.2rem; border-radius:.55rem;
+  background:#EDF2F8; border:.09rem solid var(--line); overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+}
+.mealcard .shotbox img{ width:100%; height:100%; object-fit:cover; display:block; }
+.mealcard .shotbox .empty{ font-size:1.05rem; font-weight:800; color:var(--soft);
+  text-align:center; padding:.6rem; line-height:1.35; }
 
-  NOTICE_DEFAULT_DAYS : 7,    // 공지 기본 유효기간(일)
+/* ── 하단 고정 띠 : 다가오는 일정 (항상 화면 맨 아래) ──── */
+.calbar{
+  position:fixed; left:0; right:0; bottom:0; z-index:5;
+  display:flex; align-items:center; gap:1rem;
+  padding:.4rem 1.3rem; height:3.4rem;
+  background:var(--card); border-top:.09rem solid var(--line);
+  box-shadow:0 -.35rem 1.1rem rgba(17,28,51,.07);
+}
+.calbar .ct{ margin:0; flex:0 0 auto; }
+.calbar ul{ list-style:none; display:flex; gap:1.6rem; flex:1 1 auto; overflow:hidden; }
+.calbar li{ display:flex; align-items:center; gap:.5rem;
+  font-size:1.5rem; font-weight:800; white-space:nowrap; }
+.dday{ flex:0 0 auto; min-width:3.6rem; text-align:center; font-size:1.05rem; font-weight:900;
+  color:#fff; background:var(--cal); padding:.14rem .45rem; border-radius:.3rem;
+  font-variant-numeric:tabular-nums; }
+.dday.far{ background:#EDF2F8; color:var(--soft); }
 
-  // 캐시 유지 시간(초). CacheService 최대 21600(6시간)
-  TTL : { school: 21600, meal: 21600, schedule: 21600, timetable: 900, comcigan: 60 },
+/* ── 주간 시간표 : 오른쪽 칸 전체 ──────────────────────── */
+.weekcard{ grid-area:week; min-height:0; overflow:hidden; }
+.weekcard table{ width:100%; height:100%; border-collapse:collapse; table-layout:fixed;
+  font-size:1.2rem; font-weight:700; }
+.weekcard th{ font-size:1.1rem; font-weight:900; color:var(--soft); padding:0 0 .25rem; }
+.weekcard th.period, .weekcard td.period{
+  width:2.2rem; color:var(--soft); font-size:1rem; font-weight:900; text-align:center; }
+.weekcard th.today{ color:var(--ink); }
+.weekcard td{ text-align:center; padding:.18rem .04rem; border-top:1px solid #EFF3F9;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#7C8AA3; }
+.weekcard col.today{ background:#F3F7FD; }
+.weekcard td.today{ font-weight:900; }
 
-  // 교시 시간표
-  //  · 시작 시각은 컴시간 데이터로 확인된 값 (45분 수업 + 10분 쉬는시간)
-  //  · 조례 / 점심 / 종례 시각은 추정치이므로 실제 일과에 맞게 수정하세요
-  PERIODS : [
-    { name: '조례',   start: '08:40', end: '09:00', period: 0 },
-    { name: '1교시',  start: '09:00', end: '09:45', period: 1 },
-    { name: '2교시',  start: '09:55', end: '10:40', period: 2 },
-    { name: '3교시',  start: '10:50', end: '11:35', period: 3 },
-    { name: '4교시',  start: '11:45', end: '12:30', period: 4 },
-    { name: '점심',   start: '12:30', end: '13:30', period: 0 },
-    { name: '5교시',  start: '13:30', end: '14:15', period: 5 },
-    { name: '6교시',  start: '14:25', end: '15:10', period: 6 },
-    { name: '7교시',  start: '15:20', end: '16:05', period: 7 },
-    { name: '8교시',  start: '16:15', end: '17:00', period: 8 }
-  ]
+/* ── 공지 ──────────────────────────────────────────────── */
+.note{ grid-area:note; display:none; }
+.note.show{ display:block; }
+.note .item{ display:flex; align-items:center; gap:.8rem; padding:.55rem 1rem;
+  background:var(--card); border-radius:var(--r-card);
+  border-left:.4rem solid var(--note); }
+.note .item + .item{ margin-top:.3rem; }
+.note .who{ display:flex; align-items:center; gap:.3rem; flex:0 0 auto;
+  font-size:1.05rem; font-weight:900; color:#fff; background:var(--note);
+  padding:.16rem .5rem; border-radius:.3rem; }
+.note .who svg{ width:.9rem; height:.9rem; }
+.note .text{ font-size:2.1rem; font-weight:900; line-height:1.25; letter-spacing:-.02em; }
+
+/* ── 상태 · 설정 ───────────────────────────────────────── */
+#stale{ position:fixed; right:1rem; bottom:.3rem; font-size:.95rem; font-weight:800;
+  color:var(--note); opacity:0; transition:opacity .4s; }
+#stale.show{ opacity:1; }
+#setup{ position:fixed; inset:0; background:var(--bg); display:none; flex-direction:column;
+  align-items:center; justify-content:center; gap:1.7rem; cursor:auto; z-index:10; }
+#setup.show{ display:flex; }
+#setup h1{ font-size:2.8rem; font-weight:900; letter-spacing:-.03em; }
+#setup p{ font-size:1.4rem; font-weight:700; color:var(--soft); }
+#setup .rows{ display:flex; gap:1rem; }
+#setup select{ font:inherit; font-size:2rem; font-weight:900; padding:.55rem 1.2rem;
+  border-radius:.6rem; background:var(--card); color:var(--ink); border:.1rem solid var(--line); }
+#setup button{ font:inherit; font-size:1.75rem; font-weight:900; padding:.65rem 2.8rem;
+  border-radius:.6rem; border:0; background:var(--ink); color:#fff; cursor:pointer; }
+
+@media (prefers-reduced-motion:reduce){ .slot,.slot .bar > i{ transition:none; } }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <header class="head">
+    <div class="room"><span id="roomIcon"></span><span id="room">—</span></div>
+    <div class="now">
+      <span class="nowlabel" id="nowLabel">—</span>
+      <span class="clock" id="clock">--:--</span>
+    </div>
+    <div class="nav">
+      <span class="navlabel">다른 날짜 조회</span>
+      <button class="navbtn today" id="goToday" data-off>오늘로 가기</button>
+      <button class="navbtn" id="prevDay" aria-label="이전 날짜"></button>
+      <div class="date" id="date">—</div>
+      <button class="navbtn" id="nextDay" aria-label="다음 날짜"></button>
+    </div>
+  </header>
+
+  <section class="line">
+    <div class="ct" id="lineTitle"></div>
+    <div id="slots"><div class="none">불러오는 중</div></div>
+  </section>
+
+  <section class="card mealcard">
+    <div class="ct g" id="mealTitle"></div>
+    <div id="mealBody"><div class="none">불러오는 중</div></div>
+  </section>
+
+  <section class="card weekcard">
+    <div class="ct" id="weekTitle"></div>
+    <div id="weekBody"></div>
+  </section>
+
+  <div class="note" id="note"></div>
+</div>
+
+<div class="calbar">
+  <div class="ct o" id="calTitle"></div>
+  <div id="calBody"></div>
+</div>
+
+<div id="stale">연결 끊김 — 마지막 정보 표시 중</div>
+
+<div id="setup">
+  <h1>이 교실은 몇 학년 몇 반인가요?</h1>
+  <p>한 번만 설정하면 다음부터는 바로 시작합니다</p>
+  <div class="rows"><select id="selGrade"></select><select id="selClass"></select></div>
+  <button id="btnSave">시작하기</button>
+</div>
+
+<script>
+/* ============================================================
+   서버 주소 — 이미 채워져 있습니다
+   ============================================================ */
+const API = 'https://script.google.com/macros/s/AKfycbxfa2h5lJZQjCqRFfrQ3wcACVrJcy9yDPqZKpvEsrHkoA8vCjnAnOxJkenKFKmIfCRi/exec';
+
+const REFRESH_MS = 3 * 60 * 1000;
+const RETURN_MS  = 2 * 60 * 1000;
+const HIDE_EVENTS = ['토요휴업일','재량휴업일','일요일'];
+const MAX_MEAL = 8;
+const MAX_CAL  = 3;
+
+/* ── 과목 색 ───────────────────────────────────────────── */
+const SUBJECT_COLORS = [
+  [['국어','문학','독서','작문'], '#E04A38'],
+  [['수학'],                      '#2563EB'],
+  [['영어'],                      '#7C4DE8'],
+  [['과학','물리','화학','생명','지구'], '#0F9D58'],
+  [['사회','일사','경제','지리'], '#EA8C10'],
+  [['역사','한국사'],             '#A85A2B'],
+  [['체육','스포','운동'],        '#0EA5B7'],
+  [['음악','음B'],                '#D6337E'],
+  [['미술','미B'],                '#F26B21'],
+  [['기가','기술','가정'],        '#5B7085'],
+  [['도덕','윤리'],               '#3E9C7C'],
+  [['종교','불교','법회'],        '#8A6FBF'],
+  [['정보','컴퓨터','코딩'],      '#0D9488'],
+  [['한문'],                      '#92610F'],
+  [['진로','진탐','주제','행복','창체','자율','동아리','봉사'], '#7688A3']
+];
+const FALLBACK_COLOR = '#7688A3';
+
+function subjectColor(name){
+  const s = String(name || '');
+  for (let i = 0; i < SUBJECT_COLORS.length; i++){
+    const keys = SUBJECT_COLORS[i][0];
+    for (let j = 0; j < keys.length; j++){
+      if (s.indexOf(keys[j]) >= 0) return SUBJECT_COLORS[i][1];
+    }
+  }
+  return FALLBACK_COLOR;
+}
+
+/* ── 선 아이콘 ─────────────────────────────────────────── */
+function ico(d, size){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+       + 'stroke-linecap="round" stroke-linejoin="round"'
+       + (size ? ' style="width:' + size + ';height:' + size + '"' : '') + '>' + d + '</svg>';
+}
+const ICON = {
+  board : ico('<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>'),
+  clock : ico('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  meal  : ico('<path d="M4 3v8a3 3 0 0 0 6 0V3M7 11v10"/><path d="M17 3c-1.5 2-2 4-2 6a2 2 0 0 0 4 0c0-2-.5-4-2-6zM17 11v10"/>'),
+  cal   : ico('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
+  grid  : ico('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>'),
+  pin   : ico('<path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z"/>'),
+  left  : ico('<path d="M15 19l-7-7 7-7"/>'),
+  right : ico('<path d="M9 5l7 7-7 7"/>')
 };
 
-const NEIS = 'https://open.neis.go.kr/hub/';
-const TZ   = 'Asia/Seoul';
+/* ── 상태 ──────────────────────────────────────────────── */
+const qs = new URLSearchParams(location.search);
+let GRADE = qs.get('grade') || localStorage.getItem('grade');
+let CLASS = qs.get('class') || localStorage.getItem('class');
+let VIEW_DATE = qs.get('date') || null;
+let returnTimer = null;
+let DATA = null, PERIODS = [], lastOkAt = 0;
 
+init();
 
-// ────────────────────────────────────────────────────────────
-// 웹앱 진입점
-// ────────────────────────────────────────────────────────────
+function init(){
+  if (!GRADE || !CLASS){ showSetup(); return; }
+  document.getElementById('room').textContent = GRADE + '학년 ' + CLASS + '반';
+  document.getElementById('roomIcon').innerHTML = ICON.board;
+  document.getElementById('prevDay').innerHTML  = ICON.left;
+  document.getElementById('nextDay').innerHTML  = ICON.right;
+  document.getElementById('lineTitle').innerHTML = ICON.clock + '<span>오늘 시간표</span>';
+  document.getElementById('mealTitle').innerHTML = ICON.meal  + '<span>오늘 급식</span>';
+  document.getElementById('calTitle').innerHTML  = ICON.cal   + '<span>다가오는 일정</span>';
+  document.getElementById('weekTitle').innerHTML = ICON.grid  + '<span>주간 시간표</span>';
+  updateNowLabel();
 
-/**
- * GET  ?type=all&grade=3&class=5     대시보드용 통합 응답
- *      ?type=meal[&date=20260905]
- *      ?type=schedule[&days=14]
- *      ?type=timetable&grade=3&class=5[&date=20260905]
- *      ?type=notice&grade=3&class=5
- *      ?type=config
- *      ?type=school                  (학교코드 확인용)
- */
-function doGet(e) {
-  const p = (e && e.parameter) || {};
-  const type = p.type || 'all';
-
-  try {
-    let data;
-    switch (type) {
-      case 'all'      : data = getAll(p.grade, p['class'], p.date); break;
-      case 'meal'     : data = getMeal(p.date);                     break;
-      case 'schedule' : data = getSchedule(Number(p.days) || 14, p.date); break;
-      case 'timetable': data = getTimetable(p.grade, p['class'], p.date); break;
-      case 'notice'   : data = getNotices(p.grade, p['class']);     break;
-      case 'config'   : data = getClientConfig();                   break;
-      case 'school'   : data = resolveSchool(true);                 break;
-      default: throw new Error('알 수 없는 type: ' + type);
-    }
-    return json({ ok: true, type: type, data: data, at: nowStr() });
-  } catch (err) {
-    logError('doGet/' + type, err);
-    return json({ ok: false, type: type, error: String(err && err.message || err) });
-  }
+  bindDateNav(); bindIdleCursor();
+  load(); setInterval(load, REFRESH_MS);
+  tick(); setInterval(tick, 1000);
 }
 
-/**
- * POST  본문(JSON, Content-Type: text/plain)
- *   { action:'saveNotice', token:'...', grade:3, class:5,
- *     text:'내일 체육복 준비', author:'김담임', days:3 }
- *   { action:'deleteNotice', token:'...', id:'...' }
- *
- * ※ Content-Type을 text/plain으로 보내야 preflight(OPTIONS) 없이 통과합니다.
- */
-function doPost(e) {
-  try {
-    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    requireToken(body.token);
-
-    let data;
-    switch (body.action) {
-      case 'saveNotice'  : data = saveNotice(body);          break;
-      case 'deleteNotice': data = deleteNotice(body.id);     break;
-      default: throw new Error('알 수 없는 action: ' + body.action);
-    }
-    return json({ ok: true, data: data, at: nowStr() });
-  } catch (err) {
-    logError('doPost', err);
-    return json({ ok: false, error: String(err && err.message || err) });
-  }
+function bindDateNav(){
+  document.getElementById('prevDay').addEventListener('click', function(){ moveDay(-1); });
+  document.getElementById('nextDay').addEventListener('click', function(){ moveDay(1); });
+  document.getElementById('goToday').addEventListener('click', goToday);
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowLeft')  moveDay(-1);
+    if (e.key === 'ArrowRight') moveDay(1);
+    if (e.key === 'Escape' || e.key === 'Home') goToday();
+  });
 }
-
-function json(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+function moveDay(step){
+  const base = VIEW_DATE || (DATA && DATA.date) || todayYmd();
+  VIEW_DATE = shiftYmd(base, step);
+  if (VIEW_DATE === todayYmd()) VIEW_DATE = null;
+  armReturn(); load();
 }
-
-
-// ────────────────────────────────────────────────────────────
-// 통합 응답
-// ────────────────────────────────────────────────────────────
-function getAll(grade, cls, date) {
-  const ymd = date || todayYmd();
-  const out = { date: ymd, weekday: weekdayKo(ymd) };
-
-  // 하나가 실패해도 나머지는 살린다 (전자칠판이 빈 화면이 되면 안 됨)
-  out.meal      = safe('meal',      function () { return getMeal(ymd); });
-  out.timetable = safe('timetable', function () { return getTimetable(grade, cls, ymd); });
-  out.week      = safe('week',      function () { return getWeekTimetable(grade, cls, ymd); });
-  out.photo     = safe('photo',     function () { return getMealPhoto(ymd); });
-  out.schedule  = safe('schedule',  function () { return getSchedule(14, ymd); });
-  out.notices   = safe('notice',    function () { return getNotices(grade, cls); });
-  out.config    = getClientConfig();
-  return out;
+function goToday(){ VIEW_DATE = null; clearTimeout(returnTimer); load(); }
+function armReturn(){
+  clearTimeout(returnTimer);
+  if (VIEW_DATE) returnTimer = setTimeout(goToday, RETURN_MS);
 }
-
-function safe(label, fn) {
-  try {
-    return { ok: true, value: fn() };
-  } catch (err) {
-    logError('getAll/' + label, err);
-    return { ok: false, value: null, error: String(err && err.message || err) };
-  }
+function isPreview(){ return !!VIEW_DATE && VIEW_DATE !== todayYmd(); }
+function emptyWord(){
+  if (!isPreview()) return '오늘은';
+  const d = (DATA && DATA.date) || VIEW_DATE;
+  return Number(d.slice(4,6)) + '월 ' + Number(d.slice(6,8)) + '일은';
 }
-
-function getClientConfig() {
-  return {
-    appName        : CONFIG.APP_NAME,
-    appTagline     : CONFIG.APP_TAGLINE,
-    schoolName     : CONFIG.SCHOOL_NAME,
-    periods        : CONFIG.PERIODS,
-    classStructure : CONFIG.CLASS_STRUCTURE,
-    comciganUrl    : CONFIG.COMCIGAN_URL   // 시간표 패널 WebView가 그대로 로드
+function bindIdleCursor(){
+  let t = null;
+  const hide = function(){ document.body.classList.add('idle'); };
+  const show = function(){
+    document.body.classList.remove('idle'); clearTimeout(t); t = setTimeout(hide, 5000);
   };
+  ['mousemove','touchstart','keydown'].forEach(function(ev){
+    document.addEventListener(ev, show, { passive:true });
+  });
+  t = setTimeout(hide, 5000);
 }
 
+/* ── 데이터 ────────────────────────────────────────────── */
+async function load(){
+  try{
+    let url = API + '?type=all&grade=' + encodeURIComponent(GRADE)
+                  + '&class=' + encodeURIComponent(CLASS);
+    if (VIEW_DATE) url += '&date=' + encodeURIComponent(VIEW_DATE);
+    const res = await fetch(url, { cache:'no-store' });
+    const body = await res.json();
+    if (!body.ok) throw new Error(body.error || '응답 오류');
+    DATA = body.data;
+    PERIODS = (DATA.config && DATA.config.periods) || [];
+    lastOkAt = Date.now();
+    render(); setStale(false);
+  }catch(err){
+    console.error('불러오기 실패', err);
+    setStale(Date.now() - lastOkAt > REFRESH_MS * 2.5);
+  }
+}
+function setStale(on){ document.getElementById('stale').classList.toggle('show', on); }
 
-// ────────────────────────────────────────────────────────────
-// 나이스 호출 공통
-// ────────────────────────────────────────────────────────────
-function apiKey() {
-  const k = PropertiesService.getScriptProperties().getProperty('NEIS_API_KEY');
-  if (!k) throw new Error('스크립트 속성 NEIS_API_KEY가 없습니다. 설치 안내 1번 참고');
-  return k;
+function render(){
+  renderDate(); renderMeal(); renderWeek(); renderCalendar(); renderNotes(); tick();
 }
 
-/**
- * 나이스 hub 호출. 데이터 없음(INFO-200)은 빈 배열로 정상 처리.
- */
-function neis(endpoint, params) {
-  const q = Object.assign({
-    KEY   : apiKey(),
-    Type  : 'json',
-    pIndex: 1,
-    pSize : 1000
-  }, params);
+function renderDate(){
+  const d = DATA.date;
+  document.getElementById('date').textContent =
+    Number(d.slice(4,6)) + '월 ' + Number(d.slice(6,8)) + '일 ' + DATA.weekday + '요일';
+  const on = isPreview();
+  document.getElementById('date').classList.toggle('preview', on);
+  const btn = document.getElementById('goToday');
+  if (on) btn.removeAttribute('data-off'); else btn.setAttribute('data-off', '');
+  document.querySelector('#lineTitle span').textContent = on ? '시간표' : '오늘 시간표';
+}
 
-  const url = NEIS + endpoint + '?' + Object.keys(q)
-    .filter(function (k) { return q[k] !== '' && q[k] != null; })
-    .map(function (k) { return k + '=' + encodeURIComponent(q[k]); })
-    .join('&');
-
-  const res  = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-  const code = res.getResponseCode();
-  if (code !== 200) throw new Error('나이스 응답 오류 HTTP ' + code);
-
-  let body;
-  try {
-    body = JSON.parse(res.getContentText());
-  } catch (err) {
-    throw new Error('나이스 응답 파싱 실패 (인증키 또는 파라미터 확인)');
+/* ── 주인공 : 타임라인 ─────────────────────────────────── */
+function renderSlots(){
+  const box = document.getElementById('slots');
+  const t = DATA && DATA.timetable;
+  if (t && !t.ok){ box.innerHTML = '<div class="none">시간표를 불러오지 못했습니다</div>'; return; }
+  if (!t || !t.value || !t.value.length){
+    box.innerHTML = '<div class="none">' + emptyWord() + ' 시간표가 없습니다</div>'; return;
   }
 
-  // 데이터 없음 / 오류
-  if (body.RESULT) {
-    if (body.RESULT.CODE === 'INFO-200') return [];   // 해당 조건 데이터 없음
-    throw new Error('나이스: ' + body.RESULT.CODE + ' ' + body.RESULT.MESSAGE);
+  const now  = new Date();
+  const cur  = currentSlot(now);
+  const curP = cur ? cur.period : -1;
+
+  let pct = 0, left = 0;
+  if (cur){
+    const total = cur.endMin - cur.startMin;
+    pct  = Math.min(100, Math.max(0, (minutesOf(now) - cur.startMin) / total * 100));
+    left = Math.max(0, Math.ceil(cur.endMin - minutesOf(now)));
   }
 
-  const block = body[endpoint];
-  if (!block || !block[1] || !block[1].row) return [];
-  return block[1].row;
-}
+  box.innerHTML = '<div class="slots">' + t.value.map(function(row){
+    const c    = subjectColor(row.subject);
+    const on   = row.period === curP;
+    const done = curP > 0 && row.period < curP;
+    const cls  = 'slot' + (on ? ' on' : done ? ' done' : '');
 
-/**
- * CacheService 래퍼
- * 빈 결과는 짧게만 캐시한다 — 급식이 뒤늦게 등록되어도 곧 반영되도록.
- */
-function cached(key, ttl, fn) {
-  const cache = CacheService.getScriptCache();
-  const hit = cache.get(key);
-  if (hit) {
-    try { return JSON.parse(hit); } catch (err) { /* 손상 시 재조회 */ }
-  }
-  const val = fn();
-
-  const isEmpty = !val
-    || (Array.isArray(val) && val.length === 0)
-    || (typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0);
-  const useTtl = isEmpty ? Math.min(ttl, 600) : ttl;   // 빈 결과는 최대 10분
-
-  try { cache.put(key, JSON.stringify(val), useTtl); } catch (err) { /* 100KB 초과 시 캐시 생략 */ }
-  return val;
-}
-
-/** 학교 표준코드 자동 조회 후 스크립트 속성에 보관 */
-function resolveSchool(force) {
-  const props = PropertiesService.getScriptProperties();
-  const saved = props.getProperty('SD_SCHUL_CODE');
-  if (saved && !force) return { ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE, SD_SCHUL_CODE: saved };
-
-  const rows = neis('schoolInfo', {
-    ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-    SCHUL_NM          : CONFIG.SCHOOL_NAME
-  });
-  if (!rows.length) throw new Error('학교를 찾지 못했습니다: ' + CONFIG.SCHOOL_NAME);
-
-  const row = rows[0];
-  props.setProperty('SD_SCHUL_CODE', row.SD_SCHUL_CODE);
-  return {
-    ATPT_OFCDC_SC_CODE: row.ATPT_OFCDC_SC_CODE,
-    SD_SCHUL_CODE     : row.SD_SCHUL_CODE,
-    SCHUL_NM          : row.SCHUL_NM,
-    ORG_RDNMA         : row.ORG_RDNMA
-  };
-}
-
-function schoolCode() { return resolveSchool(false).SD_SCHUL_CODE; }
-
-/** 급식 조회에 쓸 학교코드 — 별도 설정이 있으면 그것을, 없으면 본교 코드를 쓴다 */
-function mealSchoolCode() { return CONFIG.MEAL_SCHUL_CODE || schoolCode(); }
-
-
-// ────────────────────────────────────────────────────────────
-// 급식
-// ────────────────────────────────────────────────────────────
-function getMeal(date) {
-  const ymd = date || todayYmd();
-  return cached('meal_' + ymd, CONFIG.TTL.meal, function () {
-    const rows = neis('mealServiceDietInfo', {
-      ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-      SD_SCHUL_CODE     : mealSchoolCode(),
-      MLSV_YMD          : ymd
-    });
-
-    return rows.map(function (r) {
-      return {
-        type   : r.MMEAL_SC_NM,                    // 조식/중식/석식
-        dishes : parseDishes(r.DDISH_NM),
-        kcal   : (r.CAL_INFO || '').trim(),
-        origin : stripTags(r.ORPLC_INFO || '')
-      };
-    });
-  });
-}
-
-/** "쌀밥 (1.2)<br/>미역국 (5)" → [{name:'쌀밥', allergy:['1','2']}, ...] */
-function parseDishes(raw) {
-  if (!raw) return [];
-  return String(raw).split(/<br\s*\/?>/i).map(function (s) {
-    const t = stripTags(s).trim();
-    if (!t) return null;
-    const m = t.match(/\(([\d.\s]+)\)\s*$/);
-    return {
-      name    : t.replace(/\(([\d.\s]+)\)\s*$/, '').trim(),
-      allergy : m ? m[1].split('.').map(function (x) { return x.trim(); }).filter(Boolean) : []
-    };
-  }).filter(Boolean);
-}
-
-function stripTags(s) { return String(s).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '); }
-
-
-// ────────────────────────────────────────────────────────────
-// 학사일정
-// ────────────────────────────────────────────────────────────
-function getSchedule(days, baseYmd) {
-  const from = baseYmd || todayYmd();
-  const to   = addDaysYmd(from, days || 14);
-
-  return cached('sch_' + from + '_' + to, CONFIG.TTL.schedule, function () {
-    const rows = neis('SchoolSchedule', {
-      ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-      SD_SCHUL_CODE     : schoolCode(),
-      AA_FROM_YMD       : from,
-      AA_TO_YMD         : to
-    });
-
-    const seen = {};
-    const list = [];
-    rows.forEach(function (r) {
-      const name = (r.EVENT_NM || '').trim();
-      if (!name) return;
-      const key = r.AA_YMD + '|' + name;
-      if (seen[key]) return;
-      seen[key] = true;
-      list.push({
-        date  : r.AA_YMD,
-        name  : name,
-        detail: (r.EVENT_CNTNT || '').trim(),
-        dday  : diffDays(todayYmd(), r.AA_YMD)
-      });
-    });
-    list.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-    return list;
-  });
-}
-
-
-// ────────────────────────────────────────────────────────────
-// 시간표  =  컴시간 우선(실패 시 나이스) + '시간표보정' 시트 덮어쓰기
-// ────────────────────────────────────────────────────────────
-function getTimetable(grade, cls, date) {
-  const ymd = date || todayYmd();
-  if (!grade || !cls) throw new Error('grade, class 파라미터가 필요합니다');
-
-  let base;
-  if (CONFIG.TIMETABLE_SOURCE === 'comcigan') {
-    try {
-      base = getComciganTimetable(grade, cls, ymd);
-    } catch (err) {
-      logError('comcigan/fallback', err);
-      base = getNeisTimetable(grade, cls, ymd);
+    let inner = '<div class="p">' + row.period + '교시</div>'
+              + '<div class="s">' + esc(row.subject) + '</div>';
+    if (row.changed) inner += '<div class="chg">변경</div>';
+    if (on){
+      inner += '<div class="left">' + (left > 0 ? left + '분 남음' : '곧 종료') + '</div>'
+             + '<div class="bar"><i style="width:' + pct + '%"></i></div>';
     }
-  } else {
-    base = getNeisTimetable(grade, cls, ymd);
+    return '<div class="' + cls + '" style="--c:' + c + '">' + inner + '</div>';
+  }).join('') + '</div>';
+}
+
+/* ── 급식 ──────────────────────────────────────────────── */
+function renderMeal(){
+  const box = document.getElementById('mealBody');
+  const m = DATA.meal;
+  if (m && !m.ok){ box.innerHTML = '<div class="none">급식을 불러오지 못했습니다</div>'; return; }
+  if (!m || !m.value || !m.value.length){
+    box.innerHTML = '<div class="none">' + emptyWord() + ' 급식 정보가 없습니다</div>'; return;
+  }
+  const lunch = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
+  const items = (lunch.dishes || []).slice(0, MAX_MEAL)
+    .map(function(x){ return '<li>' + esc(x.name) + '</li>'; }).join('');
+  const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
+  const photo = photoUrl
+    ? '<div class="shotbox"><img src="' + esc(photoUrl) + '" alt="급식 사진" onerror="mealPhotoFallback(this)"></div>'
+    : '<div class="shotbox"><div class="empty">이미지가 없습니다</div></div>';
+  box.innerHTML = '<div class="row"><ul>' + items + '</ul>' + photo + '</div>';
+}
+function mealPhotoFallback(img){
+  if (!img || !img.parentNode) return;
+  img.parentNode.innerHTML = '<div class="empty">이미지가 없습니다</div>';
+}
+
+/* ── 주간 시간표 ───────────────────────────────────────── */
+function renderWeek(){
+  const box = document.getElementById('weekBody');
+  const w = DATA.week;
+  if (!w || !w.ok || !w.value || !w.value.length){
+    box.innerHTML = '';
+    document.querySelector('#weekTitle span').textContent = '주간 시간표';
+    return;
   }
 
-  // 보정 시트 반영 (캐시 대상 아님 — 즉시 반영되어야 함)
-  const map = JSON.parse(JSON.stringify(base));
-  applyOverrides(map, ymd, grade, cls);
+  const days = w.value, shown = DATA.date;
+  const mon = days[0], fri = days[Math.min(4, days.length - 1)];
+  document.querySelector('#weekTitle span').textContent =
+    '주간 시간표(' + shortDate(mon.date) + '(' + mon.weekday + ')~'
+                 + shortDate(fri.date) + '(' + fri.weekday + '))';
 
-  const list = Object.keys(map).map(function (k) { return map[k]; });
-  list.sort(function (a, b) { return a.period - b.period; });
-  return list;
-}
-
-/** 컴시간 중계 Worker 조회. 응답은 [{period, subject, ...}] 형식이다. */
-function getComciganTimetable(grade, cls, ymd) {
-  const props = PropertiesService.getScriptProperties();
-  const baseUrl = CONFIG.TIMETABLE_EXT_URL || props.getProperty('COMCIGAN_API_URL');
-  if (!baseUrl) throw new Error('스크립트 속성 COMCIGAN_API_URL이 없습니다');
-
-  return cached(
-    'tt_comcigan_' + ymd + '_' + grade + '_' + cls,
-    CONFIG.TTL.comcigan,
-    function () {
-      const sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
-      const url = baseUrl + sep
-        + 'schoolCode=' + encodeURIComponent(CONFIG.COMCIGAN_CODE)
-        + '&grade=' + encodeURIComponent(grade)
-        + '&class=' + encodeURIComponent(cls)
-        + '&date=' + encodeURIComponent(ymd);
-      const res = UrlFetchApp.fetch(url, {
-        muteHttpExceptions: true,
-        headers: { Accept: 'application/json' }
-      });
-      if (res.getResponseCode() !== 200) {
-        throw new Error('컴시간 중계 API HTTP ' + res.getResponseCode());
-      }
-
-      let body;
-      try {
-        body = JSON.parse(res.getContentText());
-      } catch (err) {
-        throw new Error('컴시간 중계 API JSON 파싱 실패');
-      }
-      if (!body || body.ok === false) {
-        throw new Error('컴시간 중계 API: ' + String(body && body.error || '응답 오류'));
-      }
-
-      const rows = Array.isArray(body) ? body : (body.periods || body.data || []);
-      if (!Array.isArray(rows)) throw new Error('컴시간 중계 API 응답 형식 오류');
-      const day = ymdToDate(ymd).getDay();
-      if (day >= 1 && day <= 5 && rows.length === 0) {
-        throw new Error('컴시간에 해당 날짜의 시간표가 없습니다');
-      }
-
-      const map = {};
-      rows.forEach(function (r) {
-        const p = Number(r.period);
-        const subject = String(r.subject || '').trim();
-        if (!p || !subject) return;
-        map[p] = {
-          period         : p,
-          subject        : subject,
-          teacher        : String(r.teacher || '').trim(),
-          previousSubject: String(r.previousSubject || '').trim(),
-          source         : 'comcigan',
-          changed        : Boolean(r.changed)
-        };
-      });
-      return map;
-    }
-  );
-}
-
-/** 나이스 시간표. 컴시간 장애 또는 미설정 시 fallback으로 사용한다. */
-function getNeisTimetable(grade, cls, ymd) {
-  return cached('tt_neis_' + ymd + '_' + grade + '_' + cls, CONFIG.TTL.timetable, function () {
-    const rows = neis('misTimetable', {
-      ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-      SD_SCHUL_CODE     : schoolCode(),
-      AY                : academicYear(ymd),
-      SEM               : semester(ymd),
-      ALL_TI_YMD        : ymd,
-      GRADE             : String(grade),
-      CLASS_NM          : String(cls)
-    });
-
-    const map = {};
-    rows.forEach(function (r) {
-      const p = Number(r.PERIO);
-      if (!p) return;
-      map[p] = { period: p, subject: (r.ITRT_CNTNT || '').trim(), source: 'neis', changed: false };
-    });
-    return map;
+  let maxP = 7;
+  days.forEach(function(d){
+    d.periods.forEach(function(p){ if (p.period > maxP) maxP = p.period; });
   });
-}
 
-/**
- * 그 주(월~금) 시간표. 하루치 조회를 5번 묶은 것이며 각 날짜는 개별 캐시된다.
- */
-function getWeekTimetable(grade, cls, ymd) {
-  const monday = mondayOf(ymd || todayYmd());
-  const out = [];
+  let cols = '<col class="period">', head = '<th class="period"></th>';
+  days.forEach(function(d){
+    const on = d.date === shown ? ' class="today"' : '';
+    cols += '<col' + on + '>'; head += '<th' + on + '>' + d.weekday + '</th>';
+  });
 
-  for (let i = 0; i < 5; i++) {
-    const d = addDaysYmd(monday, i);
-    let periods = [];
-    try {
-      periods = getTimetable(grade, cls, d);
-    } catch (err) {
-      logError('week/' + d, err);
-    }
-    out.push({ date: d, weekday: weekdayKo(d), periods: periods });
+  let rows = '';
+  for (let p = 1; p <= maxP; p++){
+    rows += '<tr><td class="period">' + p + '</td>';
+    days.forEach(function(d){
+      const hit = d.periods.find(function(x){ return x.period === p; });
+      const on  = d.date === shown ? ' class="today"' : '';
+      const st  = hit ? ' style="color:' + subjectColor(hit.subject) + '"' : '';
+      rows += '<td' + on + st + '>' + (hit ? esc(hit.subject) : '') + '</td>';
+    });
+    rows += '</tr>';
   }
-  return out;
+  box.innerHTML = '<table><colgroup>' + cols + '</colgroup>'
+                + '<thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
-/** 그 주의 월요일 */
-function mondayOf(ymd) {
-  const d = ymdToDate(ymd);
-  const shift = (d.getDay() + 6) % 7;   // 일=6, 월=0 ... 토=5
-  return addDaysYmd(ymd, -shift);
+/* ── 일정 ──────────────────────────────────────────────── */
+function renderCalendar(){
+  const box = document.getElementById('calBody');
+  const s = DATA.schedule;
+  if (!s || !s.ok || !s.value){ box.innerHTML = '<div class="none">—</div>'; return; }
+
+  const list = s.value
+    .filter(function(e){ return !HIDE_EVENTS.some(function(k){ return e.name.indexOf(k) >= 0; }); })
+    .filter(function(e){ return isPreview() ? true : e.dday >= 0; })
+    .slice(0, MAX_CAL);
+
+  if (!list.length){ box.innerHTML = '<div class="none">예정된 일정이 없습니다</div>'; return; }
+
+  box.innerHTML = '<ul>' + list.map(function(e){
+    const label = e.dday === 0 ? '오늘' : (e.dday > 0 ? 'D-' + e.dday : 'D+' + (-e.dday));
+    const far = e.dday > 3 ? ' far' : '';
+    return '<li><span class="dday' + far + '">' + label + '</span>'
+         + '<span>' + esc(e.name) + '</span></li>';
+  }).join('') + '</ul>';
 }
 
-/**
- * 학교 홈페이지 식단 사진.
- * 급식일정 캘린더 → 해당 날짜 상세 팝업 → 첨부 이미지 URL.
- * 실패해도 급식 표시 자체는 영향을 받지 않도록 항상 null로 마무리한다.
- */
-function getMealPhoto(ymd) {
-  if (!CONFIG.MEAL_PHOTO_PAGE) return null;
-
-  return cached('photo_' + ymd, 3600, function () {
-    try {
-      const year  = ymd.slice(0, 4);
-      const month = ymd.slice(4, 6);
-      const day   = Number(ymd.slice(6, 8));
-
-      const pageRes = UrlFetchApp.fetch(CONFIG.MEAL_PHOTO_PAGE, {
-        method: 'post',
-        muteHttpExceptions: true,
-        followRedirects: true,
-        payload: {
-          viewType    : 'calendar',
-          siteId      : 'SEI_00001624',
-          arrMlsvId   : '0',
-          srhMlsvYear : year,
-          srhMlsvMonth: month
-        },
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-      if (pageRes.getResponseCode() !== 200) return null;
-
-      const html = pageRes.getContentText();
-      const mlsvId = findMlsvIdForDay(html, day);
-      if (!mlsvId) return null;
-
-      const detailRes = UrlFetchApp.fetch(
-        'https://dongguk.sen.ms.kr/dggb/module/mlsv/selectMlsvDetailPopup.do',
-        {
-          method: 'post',
-          muteHttpExceptions: true,
-          followRedirects: true,
-          payload: { mlsvId: mlsvId },
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        }
-      );
-      if (detailRes.getResponseCode() !== 200) return null;
-
-      const detail = detailRes.getContentText();
-      const m = detail.match(/atchFileId=(\d+)/);
-      if (!m) return null;
-      return CONFIG.MEAL_PHOTO_BASE + m[1] + '&fileSn=0';
-    } catch (err) {
-      logError('mealPhoto', err);
-      return null;
-    }
-  });
+/* ── 공지 ──────────────────────────────────────────────── */
+function renderNotes(){
+  const box = document.getElementById('note');
+  const n = DATA.notices;
+  const list = (n && n.ok && n.value) ? n.value.slice(0, 2) : [];
+  if (!list.length){ box.classList.remove('show'); box.innerHTML = ''; return; }
+  box.innerHTML = list.map(function(x){
+    const who = x.scope === 'school' ? '전교' : '담임';
+    return '<div class="item"><span class="who">' + ICON.pin + who + '</span>'
+         + '<span class="text">' + esc(x.text) + '</span></div>';
+  }).join('');
+  box.classList.add('show');
 }
 
-/** 급식 캘린더 HTML에서 해당 일자(1~31)의 mlsvId를 찾는다. */
-function findMlsvIdForDay(html, day) {
-  const cells = String(html).match(/<td[\s\S]*?<\/td>/gi) || [];
-  for (let i = 0; i < cells.length; i++) {
-    const cell = cells[i];
-    const dayMatch = cell.match(/>\s*(\d{1,2})\s*</);
-    const idMatch  = cell.match(/fnDetail\('(\d+)'/);
-    if (dayMatch && idMatch && Number(dayMatch[1]) === Number(day)) {
-      return idMatch[1];
-    }
+/* ── 시계 ──────────────────────────────────────────────── */
+function tick(){
+  const now = new Date();
+  document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
+  updateNowLabel(now);
+  if (DATA) renderSlots();
+}
+
+function updateNowLabel(now){
+  const d = now || new Date();
+  const weekdays = ['일','월','화','수','목','금','토'];
+  document.getElementById('nowLabel').textContent =
+    (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + weekdays[d.getDay()] + '요일';
+}
+
+function currentSlot(now){
+  if (isPreview()) return null;
+  const m = minutesOf(now || new Date());
+  for (let i = 0; i < PERIODS.length; i++){
+    const p = PERIODS[i], s = toMin(p.start), e = toMin(p.end);
+    if (m >= s && m < e) return { name:p.name, period:p.period, startMin:s, endMin:e };
   }
   return null;
 }
 
-/**
- * '시간표보정' 시트
- *   A:날짜(YYYY-MM-DD 또는 20260905)  B:학년  C:반  D:교시
- *   E:과목(비우면 해당 교시 삭제)     F:비고   G:작성자
- */
-function applyOverrides(map, ymd, grade, cls) {
-  const sh = getSheet(CONFIG.SHEET_TIMETABLE);
-  const values = sh.getDataRange().getValues();
-
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    if (!row[0]) continue;
-
-    if (normYmd(row[0]) !== ymd) continue;
-    if (String(row[1]).trim() !== String(grade)) continue;
-    if (String(row[2]).trim() !== String(cls)) continue;
-
-    const period = Number(row[3]);
-    if (!period) continue;
-
-    const subject = String(row[4] || '').trim();
-    if (!subject) { delete map[period]; continue; }
-
-    map[period] = {
-      period : period,
-      subject: subject,
-      note   : String(row[5] || '').trim(),
-      by     : String(row[6] || '').trim(),
-      source : 'override',
-      changed: true
-    };
+/* ── 최초 설정 ─────────────────────────────────────────── */
+function showSetup(){
+  document.getElementById('setup').classList.add('show');
+  document.body.style.cursor = 'auto';
+  const g = document.getElementById('selGrade'), c = document.getElementById('selClass');
+  const structure = { 1:7, 2:7, 3:6 };
+  [1,2,3].forEach(function(n){ g.add(new Option(n + '학년', n)); });
+  fill(); g.addEventListener('change', fill);
+  function fill(){
+    c.innerHTML = '';
+    const max = structure[g.value] || 10;
+    for (let i = 1; i <= max; i++) c.add(new Option(i + '반', i));
   }
-}
-
-
-// ────────────────────────────────────────────────────────────
-// 공지
-// ────────────────────────────────────────────────────────────
-
-/** 학년 0 / 반 0 = 전교 공지 */
-function getNotices(grade, cls) {
-  const sh = getSheet(CONFIG.SHEET_NOTICE);
-  const values = sh.getDataRange().getValues();
-  const today = todayYmd();
-  const out = [];
-
-  for (let i = 1; i < values.length; i++) {
-    const r = values[i];
-    if (!r[0]) continue;                                  // id 없음
-    const g = String(r[1]).trim();
-    const c = String(r[2]).trim();
-    const expire = r[5] ? normYmd(r[5]) : null;
-
-    if (expire && expire < today) continue;               // 만료
-    const isAll = (g === '0' || g === '');
-    if (!isAll && (g !== String(grade) || c !== String(cls))) continue;
-
-    out.push({
-      id      : String(r[0]),
-      scope   : isAll ? 'school' : 'class',
-      grade   : g, class: c,
-      text    : String(r[3] || ''),
-      author  : String(r[4] || ''),
-      expire  : expire,
-      created : r[6] ? Utilities.formatDate(new Date(r[6]), TZ, 'yyyy-MM-dd HH:mm') : ''
-    });
-  }
-
-  // 전교 공지 먼저, 그다음 최신순
-  out.sort(function (a, b) {
-    if (a.scope !== b.scope) return a.scope === 'school' ? -1 : 1;
-    return a.created < b.created ? 1 : -1;
+  document.getElementById('btnSave').addEventListener('click', function(){
+    localStorage.setItem('grade', g.value);
+    localStorage.setItem('class', c.value);
+    location.reload();
   });
-  return out;
 }
 
-function saveNotice(body) {
-  const text = String(body.text || '').trim();
-  if (!text) throw new Error('공지 내용이 비어 있습니다');
-  if (text.length > 300) throw new Error('공지는 300자 이내로 입력해 주세요');
-
-  const days   = Number(body.days) || CONFIG.NOTICE_DEFAULT_DAYS;
-  const id     = Utilities.getUuid().slice(0, 8);
-  const expire = addDaysYmd(todayYmd(), days);
-
-  getSheet(CONFIG.SHEET_NOTICE).appendRow([
-    id,
-    String(body.grade != null ? body.grade : 0),
-    String(body['class'] != null ? body['class'] : 0),
-    text,
-    String(body.author || ''),
-    expire,
-    new Date()
-  ]);
-  return { id: id, expire: expire };
+/* ── 보조 ──────────────────────────────────────────────── */
+function toMin(hhmm){ const p = String(hhmm).split(':'); return +p[0] * 60 + +p[1]; }
+function todayYmd(){ const d = new Date();
+  return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()); }
+function shortDate(ymd){
+  return Number(ymd.slice(4,6)) + '.' + Number(ymd.slice(6,8));
 }
-
-function deleteNotice(id) {
-  if (!id) throw new Error('id가 없습니다');
-  const sh = getSheet(CONFIG.SHEET_NOTICE);
-  const values = sh.getDataRange().getValues();
-  for (let i = values.length - 1; i >= 1; i--) {
-    if (String(values[i][0]) === String(id)) {
-      sh.deleteRow(i + 1);
-      return { deleted: id };
-    }
-  }
-  throw new Error('해당 공지를 찾을 수 없습니다: ' + id);
+function shiftYmd(ymd, step){
+  const d = new Date(+ymd.slice(0,4), +ymd.slice(4,6)-1, +ymd.slice(6,8));
+  d.setDate(d.getDate() + step);
+  return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate());
 }
-
-function requireToken(token) {
-  const expected = PropertiesService.getScriptProperties().getProperty('WRITE_TOKEN');
-  if (!expected) throw new Error('스크립트 속성 WRITE_TOKEN이 없습니다');
-  if (String(token) !== expected) throw new Error('쓰기 권한이 없습니다');
-}
-
-
-// ────────────────────────────────────────────────────────────
-// 시트 유틸
-// ────────────────────────────────────────────────────────────
-const SHEET_HEADERS = {};
-SHEET_HEADERS[CONFIG.SHEET_NOTICE]    = ['id', '학년', '반', '내용', '작성자', '만료일', '작성일시'];
-SHEET_HEADERS[CONFIG.SHEET_TIMETABLE] = ['날짜', '학년', '반', '교시', '과목', '비고', '작성자'];
-SHEET_HEADERS[CONFIG.SHEET_LOG]       = ['일시', '위치', '내용'];
-
-function getSheet(name) {
-  const ss = SpreadsheetApp.getActive();
-  let sh = ss.getSheetByName(name);
-  if (!sh) {
-    sh = ss.insertSheet(name);
-    const head = SHEET_HEADERS[name];
-    if (head) {
-      sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
-      sh.setFrozenRows(1);
-    }
-  }
-  return sh;
-}
-
-function logError(where, err) {
-  try {
-    getSheet(CONFIG.SHEET_LOG).appendRow([new Date(), where, String(err && err.stack || err)]);
-  } catch (e) { /* 로깅 실패는 무시 */ }
-}
-
-
-// ────────────────────────────────────────────────────────────
-// 날짜 유틸
-// ────────────────────────────────────────────────────────────
-function todayYmd() { return Utilities.formatDate(new Date(), TZ, 'yyyyMMdd'); }
-function nowStr()   { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
-
-function normYmd(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyyMMdd');
-  return String(v).replace(/[^0-9]/g, '').slice(0, 8);
-}
-
-function ymdToDate(ymd) {
-  const s = normYmd(ymd);
-  return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)));
-}
-
-function addDaysYmd(ymd, days) {
-  const d = ymdToDate(ymd);
-  d.setDate(d.getDate() + days);
-  return Utilities.formatDate(d, TZ, 'yyyyMMdd');
-}
-
-function diffDays(fromYmd, toYmd) {
-  return Math.round((ymdToDate(toYmd) - ymdToDate(fromYmd)) / 86400000);
-}
-
-function weekdayKo(ymd) {
-  return ['일', '월', '화', '수', '목', '금', '토'][ymdToDate(ymd).getDay()];
-}
-
-/** 학년도: 1~2월은 전년도 */
-function academicYear(ymd) {
-  const s = normYmd(ymd);
-  const y = Number(s.slice(0, 4)), m = Number(s.slice(4, 6));
-  return String(m <= 2 ? y - 1 : y);
-}
-
-/** 학기: 3~7월 1학기, 그 외 2학기 */
-function semester(ymd) {
-  const m = Number(normYmd(ymd).slice(4, 6));
-  return (m >= 3 && m <= 7) ? '1' : '2';
-}
-
-
-// ────────────────────────────────────────────────────────────
-// 설치·점검용 함수 (편집기에서 직접 실행)
-// ────────────────────────────────────────────────────────────
-
-/** ① 인증키·쓰기 토큰·컴시간 Worker 주소 저장. 값을 채워 1회 실행한 뒤 다시 비워두세요. */
-function 설정_속성저장() {
-  const NEIS_API_KEY    = '';   // ← 개방포털 인증키 붙여넣기
-  const WRITE_TOKEN     = '';   // ← 공지 입력용 임의 문자열 (예: dgm-2026-9f3k)
-  const COMCIGAN_API_URL = '';  // ← 배포한 Worker 주소 (예: https://...workers.dev/)
-
-  const props = PropertiesService.getScriptProperties();
-  if (NEIS_API_KEY)     props.setProperty('NEIS_API_KEY', NEIS_API_KEY);
-  if (WRITE_TOKEN)      props.setProperty('WRITE_TOKEN', WRITE_TOKEN);
-  if (COMCIGAN_API_URL) props.setProperty('COMCIGAN_API_URL', COMCIGAN_API_URL);
-  Logger.log('저장 완료: ' + props.getKeys().join(', '));
-}
-
-/** ② 시트 3개 생성 */
-function 설정_시트생성() {
-  [CONFIG.SHEET_NOTICE, CONFIG.SHEET_TIMETABLE, CONFIG.SHEET_LOG].forEach(getSheet);
-  Logger.log('시트 준비 완료');
-}
-
-/** ③ 전체 점검 — 학교코드·급식·학사일정·시간표를 순서대로 확인 */
-function 점검_전체() {
-  Logger.log('■ 학교 조회');
-  Logger.log(JSON.stringify(resolveSchool(true), null, 2));
-
-  Logger.log('■ 오늘 급식');
-  Logger.log(JSON.stringify(getMeal(), null, 2));
-
-  Logger.log('■ 학사일정 14일');
-  Logger.log(JSON.stringify(getSchedule(14), null, 2));
-
-  Logger.log('■ 3학년 5반 시간표');
-  try {
-    const timetable = getTimetable(3, 5);
-    Logger.log(JSON.stringify(timetable, null, 2));
-    Logger.log('→ 사용 소스: ' + (timetable[0] && timetable[0].source || '데이터 없음'));
-  } catch (err) {
-    Logger.log('시간표 조회 실패: ' + err);
-  }
-}
-
-/** ④ 급식 등록 여부 진단 — 한 달치를 훑어 며칠이나 등록돼 있는지 확인 */
-function 점검_급식() {
-  const from = Utilities.formatDate(new Date(), TZ, 'yyyyMM') + '01';
-  const to   = addDaysYmd(from, 40);
-
-  const rows = neis('mealServiceDietInfo', {
-    ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-    SD_SCHUL_CODE     : schoolCode(),
-    MLSV_FROM_YMD     : from,
-    MLSV_TO_YMD       : to
-  });
-
-  Logger.log('조회 기간: ' + from + ' ~ ' + to);
-  Logger.log('등록된 급식 건수: ' + rows.length);
-
-  if (!rows.length) {
-    Logger.log('→ 이 기간에 등록된 식단이 하나도 없습니다.');
-    Logger.log('→ 학교가 나이스에 급식을 등록하지 않는 것으로 보입니다. 급식 담당 선생님께 확인 필요.');
-    return;
-  }
-
-  const days = rows.map(function (r) { return r.MLSV_YMD + ' ' + r.MMEAL_SC_NM; });
-  Logger.log('등록된 날짜:\n' + days.join('\n'));
-  Logger.log('가장 최근 등록일: ' + rows[rows.length - 1].MLSV_YMD);
-  Logger.log('→ 등록은 되고 있습니다. 화면이 비었다면 조회 날짜가 미등록 구간입니다.');
-}
-
-/**
- * ⑤ 급식 조회 실패 원인 진단
- *    나이스가 실제로 무엇을 돌려주는지 원문 그대로 확인한다.
- *    (급식이 있는 것으로 확인된 날짜를 TARGET에 넣고 실행)
- */
-function 진단_급식원인() {
-  const TARGET = '20260907';   // 급식이 있는 것으로 확인된 날짜
-
-  const props = PropertiesService.getScriptProperties();
-  Logger.log('■ 저장된 학교코드: ' + props.getProperty('SD_SCHUL_CODE'));
-
-  // 1) 같은 이름으로 잡히는 학교가 여러 개인지 확인
-  Logger.log('\n■ 이름이 비슷한 학교 목록');
-  try {
-    const list = neis('schoolInfo', {
-      ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-      SCHUL_NM          : '동국대학교사범대학부속'
-    });
-    list.forEach(function (r) {
-      Logger.log('  ' + r.SD_SCHUL_CODE + ' | ' + r.SCHUL_NM + ' | ' + r.SCHUL_KND_SC_NM);
-    });
-  } catch (err) {
-    Logger.log('  조회 실패: ' + err);
-  }
-
-  // 2) 단일 날짜 조회 — 응답 원문
-  Logger.log('\n■ 단일 날짜(MLSV_YMD=' + TARGET + ') 원문 응답');
-  Logger.log(rawNeis('mealServiceDietInfo', {
-    ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-    SD_SCHUL_CODE     : schoolCode(),
-    MLSV_YMD          : TARGET
-  }));
-
-  // 3) 기간 조회 — 응답 원문
-  Logger.log('\n■ 기간 조회(MLSV_FROM_YMD~MLSV_TO_YMD) 원문 응답');
-  Logger.log(rawNeis('mealServiceDietInfo', {
-    ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-    SD_SCHUL_CODE     : schoolCode(),
-    MLSV_FROM_YMD     : '20260907',
-    MLSV_TO_YMD       : '20260912'
-  }));
-
-  // 4) 학교코드 없이 날짜만 — 인증키 자체가 급식 서비스에 유효한지 확인
-  Logger.log('\n■ 교육청+날짜만 조회 (인증키 유효성 확인, 앞부분만)');
-  Logger.log(rawNeis('mealServiceDietInfo', {
-    ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-    MLSV_YMD          : TARGET,
-    pSize             : 3
-  }));
-}
-
-/** 파싱하지 않은 응답 원문을 그대로 돌려준다 (진단 전용) */
-function rawNeis(endpoint, params) {
-  const q = Object.assign({ KEY: apiKey(), Type: 'json', pIndex: 1, pSize: 100 }, params);
-  const url = NEIS + endpoint + '?' + Object.keys(q)
-    .map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
-
-  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-  const txt = res.getContentText();
-  return 'HTTP ' + res.getResponseCode() + '\n'
-       + url.replace(apiKey(), '(KEY)') + '\n'
-       + txt.slice(0, 1200);
-}
-
-/**
- * ⑥ 급식이 어느 학교코드에 등록돼 있는지 찾는다.
- *    관련 학교를 모두 훑어 실제 식단이 나오는 코드를 알려준다.
- */
-function 진단_급식학교찾기() {
-  const TARGET = '20260907';   // 급식이 있는 것으로 확인된 날짜
-
-  const list = neis('schoolInfo', {
-    ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-    SCHUL_NM          : '동국대학교사범대학부속'
-  });
-
-  Logger.log('조회 날짜: ' + TARGET + '\n');
-  let found = null;
-
-  list.forEach(function (s) {
-    let msg;
-    try {
-      const rows = neis('mealServiceDietInfo', {
-        ATPT_OFCDC_SC_CODE: CONFIG.ATPT_CODE,
-        SD_SCHUL_CODE     : s.SD_SCHUL_CODE,
-        MLSV_YMD          : TARGET
-      });
-      if (rows.length) {
-        const kinds = rows.map(function (r) { return r.MMEAL_SC_NM; }).join(', ');
-        const first = stripTags(rows[0].DDISH_NM || '').slice(0, 40);
-        msg = '★ 식단 있음 (' + kinds + ') — ' + first;
-        if (!found) found = s.SD_SCHUL_CODE;
-      } else {
-        msg = '없음';
-      }
-    } catch (err) {
-      msg = '오류: ' + err;
-    }
-    Logger.log(s.SD_SCHUL_CODE + ' | ' + s.SCHUL_NM + '\n    → ' + msg);
-  });
-
-  Logger.log('\n────────────────────────────');
-  if (found) {
-    Logger.log('CONFIG.MEAL_SCHUL_CODE 에 다음 값을 넣으세요: \'' + found + '\'');
-  } else {
-    Logger.log('어느 코드에서도 식단을 찾지 못했습니다. 날짜를 바꿔 다시 시도해 보세요.');
-  }
-}
-
-/**
- * ⑦ 급식 사진 페이지 구조 진단
- *    학교 홈페이지를 읽어 첨부파일 번호가 어떤 모양으로 박혀 있는지 확인한다.
- *    이 로그를 보고 실제 추출 규칙을 확정한다.
- */
-function 진단_급식사진() {
-  const url = CONFIG.MEAL_PHOTO_PAGE;
-  Logger.log('요청 주소: ' + url);
-
-  const res = UrlFetchApp.fetch(url, {
-    muteHttpExceptions: true,
-    followRedirects: true,
-    headers: { 'User-Agent': 'Mozilla/5.0' }
-  });
-
-  Logger.log('HTTP ' + res.getResponseCode());
-  const html = res.getContentText();
-  Logger.log('본문 길이: ' + html.length);
-
-  // 1) 첨부파일 번호가 있는지
-  const ids = html.match(/atchFileId=(\d+)/g) || [];
-  Logger.log('\n■ atchFileId 등장 횟수: ' + ids.length);
-  Logger.log(ids.slice(0, 12).join(', '));
-
-  // 2) 첫 번째 번호 주변 HTML — 날짜와 어떻게 묶여 있는지 확인
-  const at = html.indexOf('atchFileId');
-  if (at >= 0) {
-    Logger.log('\n■ 첫 번째 번호 주변 HTML');
-    Logger.log(html.slice(Math.max(0, at - 700), at + 400));
-  } else {
-    Logger.log('\n■ 번호가 없습니다. 사진이 페이지 로딩 후 스크립트로 채워지는 구조일 수 있습니다.');
-    Logger.log('■ 본문 앞부분 1500자');
-    Logger.log(html.slice(0, 1500));
-  }
-
-  // 3) 날짜 표기가 어떤 형태인지
-  const days = html.match(/20\d{2}[-.\/]?\d{2}[-.\/]?\d{2}/g) || [];
-  Logger.log('\n■ 본문에 보이는 날짜 표기 예시');
-  Logger.log(days.slice(0, 10).join(', ') || '(없음)');
-}
-
-/** ⑧ 캐시 초기화 (일정이 바뀌었는데 화면이 그대로일 때) */
-function 캐시_비우기() {
-  CacheService.getScriptCache().removeAll([]);
-  Logger.log('캐시 삭제 요청 완료 (개별 키는 TTL 만료 시 자동 소멸)');
-}
-
-
-/* ============================================================
-   [설치 안내]
-
-   1. 구글 드라이브에서 스프레드시트 새로 만들기
-      → 확장 프로그램 > Apps Script → 이 코드 전체 붙여넣기
-
-   2. 인증키 저장 (둘 중 하나)
-      (a) 좌측 톱니 '프로젝트 설정' > 스크립트 속성 > 속성 추가
-          NEIS_API_KEY = (개방포털 인증키)
-          WRITE_TOKEN  = (임의 문자열)
-      (b) 또는 설정_속성저장() 상단에 값을 넣고 1회 실행 후 값 삭제
-
-   3. 설정_시트생성() 실행 → 시트 3개 생성 확인
-
-   4. 점검_전체() 실행 → 실행 로그에서 학교코드·급식·시간표 확인
-      · 시간표가 비어 있으면 학년/반 값 또는 나이스 등록 여부 확인
-
-   5. 배포 > 새 배포 > 유형: 웹 앱
-      · 실행: 나
-      · 액세스 권한: 모든 사용자
-      → /exec URL 복사
-
-   6. 브라우저에서 테스트
-      {exec}?type=school
-      {exec}?type=all&grade=3&class=5
-
-   ※ 코드를 수정하면 반드시 '배포 관리 > 편집 > 버전: 새 버전'으로
-     재배포해야 반영됩니다.
-   ============================================================ */
+function minutesOf(d){ return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60; }
+function pad(n){ return String(n).padStart(2,'0'); }
+function esc(s){ return String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
