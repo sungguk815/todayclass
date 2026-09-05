@@ -48,7 +48,7 @@ svg{ display:block; }
 .head .navlabel{ font-size:1.05rem; font-weight:800; color:var(--soft); margin-right:.15rem;
   white-space:nowrap; }
 .head .date{ font-size:1.45rem; font-weight:800; color:var(--soft);
-  min-width:8rem; text-align:center; padding:.14rem .5rem; border-radius:.35rem; }
+  min-width:9.5rem; text-align:center; padding:.14rem .5rem; border-radius:.35rem; }
 .head .date.preview{ color:#7A4B00; background:#FFE9B8; }
 .navbtn{ display:grid; place-items:center; width:2.1rem; height:2.1rem;
   border-radius:.5rem; border:.09rem solid var(--line); background:var(--card);
@@ -132,9 +132,9 @@ svg{ display:block; }
 .calbar ul{ list-style:none; display:flex; gap:1.6rem; flex:1 1 auto; overflow:hidden; }
 .calbar li{ display:flex; align-items:center; gap:.5rem;
   font-size:1.5rem; font-weight:800; white-space:nowrap; }
-.dday{ flex:0 0 auto; min-width:3.6rem; text-align:center; font-size:1.05rem; font-weight:900;
+.dday{ flex:0 0 auto; min-width:5.4rem; text-align:center; font-size:1.05rem; font-weight:900;
   color:#fff; background:var(--cal); padding:.14rem .45rem; border-radius:.3rem;
-  font-variant-numeric:tabular-nums; }
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
 .dday.far{ background:#EDF2F8; color:var(--soft); }
 
 /* ── 주간 시간표 : 오른쪽 칸 전체 ──────────────────────── */
@@ -191,7 +191,6 @@ svg{ display:block; }
       <span class="clock" id="clock">--:--</span>
     </div>
     <div class="nav">
-      <span class="navlabel">다른 날짜 조회</span>
       <button class="navbtn today" id="goToday" data-off>오늘로 가기</button>
       <button class="navbtn" id="prevDay" aria-label="이전 날짜"></button>
       <div class="date" id="date">—</div>
@@ -307,8 +306,8 @@ function init(){
   document.getElementById('roomIcon').innerHTML = ICON.board;
   document.getElementById('prevDay').innerHTML  = ICON.left;
   document.getElementById('nextDay').innerHTML  = ICON.right;
-  document.getElementById('lineTitle').innerHTML = ICON.clock + '<span>오늘 시간표</span>';
-  document.getElementById('mealTitle').innerHTML = ICON.meal  + '<span>오늘 급식</span>';
+  document.getElementById('lineTitle').innerHTML = ICON.clock + '<span>수업 시간표</span>';
+  document.getElementById('mealTitle').innerHTML = ICON.meal  + '<span>점심 식단</span>';
   document.getElementById('calTitle').innerHTML  = ICON.cal   + '<span>다가오는 일정</span>';
   document.getElementById('weekTitle').innerHTML = ICON.grid  + '<span>주간 시간표</span>';
   updateNowLabel();
@@ -383,13 +382,12 @@ function render(){
 
 function renderDate(){
   const d = DATA.date;
-  document.getElementById('date').textContent =
-    Number(d.slice(4,6)) + '월 ' + Number(d.slice(6,8)) + '일 ' + DATA.weekday + '요일';
+  document.getElementById('date').textContent = formatDotDate(d, DATA.weekday) + ' 조회';
   const on = isPreview();
   document.getElementById('date').classList.toggle('preview', on);
   const btn = document.getElementById('goToday');
   if (on) btn.removeAttribute('data-off'); else btn.setAttribute('data-off', '');
-  document.querySelector('#lineTitle span').textContent = on ? '시간표' : '오늘 시간표';
+  document.querySelector('#lineTitle span').textContent = '수업 시간표';
 }
 
 /* ── 주인공 : 타임라인 ─────────────────────────────────── */
@@ -433,7 +431,7 @@ function renderSlots(){
 function renderMeal(){
   const box = document.getElementById('mealBody');
   const title = document.getElementById('mealTitle');
-  const mealLabel = isPreview() ? '급식' : '오늘 급식';
+  const mealLabel = '점심 식단';
   const m = DATA.meal;
   if (m && !m.ok){
     title.innerHTML = ICON.meal + '<span>' + mealLabel + '</span>';
@@ -518,7 +516,7 @@ function renderCalendar(){
   if (!list.length){ box.innerHTML = '<div class="none">예정된 일정이 없습니다</div>'; return; }
 
   box.innerHTML = '<ul>' + list.map(function(e){
-    const label = e.dday === 0 ? '오늘' : (e.dday > 0 ? 'D-' + e.dday : 'D+' + (-e.dday));
+    const label = formatDotDate(e.date, weekdayOf(e.date));
     const far = e.dday > 3 ? ' far' : '';
     return '<li><span class="dday' + far + '">' + label + '</span>'
          + '<span>' + esc(e.name) + '</span></li>';
@@ -590,6 +588,14 @@ function todayYmd(){ const d = new Date();
   return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()); }
 function shortDate(ymd){
   return Number(ymd.slice(4,6)) + '.' + Number(ymd.slice(6,8));
+}
+function weekdayOf(ymd){
+  const weekdays = ['일','월','화','수','목','금','토'];
+  const d = new Date(+ymd.slice(0,4), +ymd.slice(4,6)-1, +ymd.slice(6,8));
+  return weekdays[d.getDay()];
+}
+function formatDotDate(ymd, weekday){
+  return shortDate(ymd) + '.(' + (weekday || weekdayOf(ymd)) + ')';
 }
 function shiftYmd(ymd, step){
   const d = new Date(+ymd.slice(0,4), +ymd.slice(4,6)-1, +ymd.slice(6,8));
