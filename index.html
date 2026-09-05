@@ -109,6 +109,11 @@ svg{ display:block; }
   font-size:1.35rem; font-weight:800; line-height:1.25; }
 .mealcard li::before{ content:''; width:.3rem; height:.3rem; border-radius:50%;
   background:var(--meal); flex:0 0 auto; }
+.mealcard .menu{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:.35rem; }
+.mealcard .allergy{
+  font-size:.92rem; font-weight:700; color:var(--soft); line-height:1.35;
+  letter-spacing:-.01em;
+}
 .mealcard .shotbox{
   flex:0 0 11rem; width:11rem; min-height:8.2rem; border-radius:.55rem;
   background:#EDF2F8; border:.09rem solid var(--line); overflow:hidden;
@@ -261,6 +266,12 @@ const SUBJECT_COLORS = [
   [['진로','진탐','주제','행복','창체','자율','동아리','봉사'], '#7688A3']
 ];
 const FALLBACK_COLOR = '#7688A3';
+const ALLERGY_NAMES = {
+  '1':'난류', '2':'우유', '3':'메밀', '4':'땅콩', '5':'대두', '6':'밀',
+  '7':'고등어', '8':'게', '9':'새우', '10':'돼지고기', '11':'복숭아', '12':'토마토',
+  '13':'아황산류', '14':'호두', '15':'닭고기', '16':'쇠고기', '17':'오징어',
+  '18':'조개류', '19':'잣'
+};
 
 function subjectColor(name){
   const s = String(name || '');
@@ -447,13 +458,35 @@ function renderMeal(){
   const kcal = String(lunch.kcal || '').trim();
   title.innerHTML = ICON.meal + '<span>' + mealLabel + '</span>'
     + (kcal ? '<span class="kcal">' + esc(kcal) + '</span>' : '');
-  const items = (lunch.dishes || []).slice(0, MAX_MEAL)
-    .map(function(x){ return '<li>' + esc(x.name) + '</li>'; }).join('');
+  const dishes = (lunch.dishes || []).slice(0, MAX_MEAL);
+  const items = dishes.map(function(x){
+    return '<li>' + esc(String(x.name || '').replace(/\*+$/, '')) + '</li>';
+  }).join('');
+  const allergyNote = formatAllergyNote(dishes);
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
   const photo = photoUrl
     ? '<div class="shotbox"><img src="' + esc(photoUrl) + '" alt="급식 사진" onerror="mealPhotoFallback(this)"></div>'
     : '<div class="shotbox"><div class="empty">이미지가 없습니다</div></div>';
-  box.innerHTML = '<div class="row"><ul>' + items + '</ul>' + photo + '</div>';
+  box.innerHTML = '<div class="row"><div class="menu"><ul>' + items + '</ul>'
+                + (allergyNote ? '<div class="allergy">' + esc(allergyNote) + '</div>' : '')
+                + '</div>' + photo + '</div>';
+}
+function formatAllergyNote(dishes){
+  const seen = {};
+  const codes = [];
+  (dishes || []).forEach(function(dish){
+    (dish.allergy || []).forEach(function(code){
+      const key = String(code);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      codes.push(key);
+    });
+  });
+  if (!codes.length) return '';
+  codes.sort(function(a, b){ return Number(a) - Number(b); });
+  return '알레르기: ' + codes.map(function(code){
+    return code + '.' + (ALLERGY_NAMES[code] || '기타');
+  }).join(' · ');
 }
 function mealPhotoFallback(img){
   if (!img || !img.parentNode) return;
