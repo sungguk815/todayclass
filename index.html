@@ -56,6 +56,9 @@ svg{ display:block; }
 .head .date{ font-size:1.45rem; font-weight:800; color:var(--soft);
   min-width:9.5rem; text-align:center; padding:.14rem .5rem; border-radius:.35rem; }
 .head .date.preview{ color:#7A4B00; background:#FFE9B8; }
+.head .date .sub{ font-size:.68em; font-weight:800; margin-left:.3em; opacity:.8; }
+.head .date.loading{ animation:datePulse 1.1s ease-in-out infinite; }
+@keyframes datePulse{ 0%,100%{ opacity:1; } 50%{ opacity:.45; } }
 .navbtn{ display:grid; place-items:center; width:2.1rem; height:2.1rem;
   border-radius:.5rem; border:.09rem solid var(--line); background:var(--card);
   color:var(--soft); cursor:pointer; }
@@ -302,7 +305,10 @@ svg{ display:block; }
 }
 .cal-month .empty{ text-align:center; padding:2rem 1rem; }
 
-@media (prefers-reduced-motion:reduce){ .slot,.slot .bar > i{ transition:none; } }
+@media (prefers-reduced-motion:reduce){
+  .slot,.slot .bar > i{ transition:none; }
+  .head .date.loading{ animation:none; opacity:.6; }
+}
 </style>
 </head>
 
@@ -446,6 +452,11 @@ let setupReady = false;
 let SLOT_ROWS = {};
 let tipPeriod = null, tipSticky = false, tipTimer = null;
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const dayCache = {};      // 날짜별로 받아온 응답
+const prefetching = {};   // 미리 받는 중인 날짜
+let loadSeq = 0, prefetchTimer = null;
+
 /* 1.35를 넘기면 급식·주간 시간표 칸이 눌리므로 여기까지만 확대합니다 */
 const ZOOM_MIN = 0.7, ZOOM_MAX = 1.35, ZOOM_STEP = 0.05;
 let ZOOM = 1, zoomToastTimer = null;
@@ -469,7 +480,8 @@ function init(){
     document.getElementById('calNextMonth').innerHTML = ICON.right;
     updateNowLabel();
     bindDateNav(); bindIdleCursor(); bindCalendarModal(); bindZoom();
-    load(); setInterval(load, REFRESH_MS);
+    load(false, true);
+    setInterval(function(){ load(false, false); }, REFRESH_MS);
     tick(); setInterval(tick, 1000);
   }catch(err){
     console.error(err);
@@ -525,9 +537,13 @@ function moveDay(step){
   const base = VIEW_DATE || (DATA && DATA.date) || todayYmd();
   VIEW_DATE = shiftYmd(base, step);
   if (VIEW_DATE === todayYmd()) VIEW_DATE = null;
-  armReturn(); load();
+  armReturn(); load(true, true);
 }
-function goToday(){ VIEW_DATE = null; clearTimeout(returnTimer); load(); }
+function goToday(){
+  hideTip();
+  VIEW_DATE = null; clearTimeout(returnTimer);
+  load(true, true);
+}
 function armReturn(){
   clearTimeout(returnTimer);
   if (VIEW_DATE) returnTimer = setTimeout(goToday, RETURN_MS);
@@ -550,23 +566,116 @@ function bindIdleCursor(){
   t = setTimeout(hide, 5000);
 }
 
-async function load(){
+/* ── 데이터 불러오기 ───────────────────────────────────────
+   서버 응답이 4초 넘게 걸리므로
+   · 받아온 날짜는 화면 캐시에 담아 두고
+   · 앞뒤 하루를 미리 받아 둬서 날짜 이동이 기다림 없이 넘어가게 한다 */
+function dayKey(ymd){ return (ymd || todayYmd()) + '/' + GRADE + '/' + CLASS; }
+
+function dayUrl(ymd){
+  let url = API + '?type=all&grade=' + encodeURIComponent(GRADE)
+                + '&class=' + encodeURIComponent(CLASS);
+  if (ymd) url += '&date=' + encodeURIComponent(ymd);
+  return url;
+}
+
+async function fetchDay(ymd){
+  const res = await fetch(dayUrl(ymd), { cache:'no-store' });
+  const body = await res.json();
+  if (!body.ok) throw new Error(body.error || '응답 오류');
+  dayCache[dayKey(ymd)] = { data:body.data, at:Date.now() };
+  lastOkAt = Date.now();
+  return body.data;
+}
+
+function showDay(data){
+  DATA = data;
+  PERIODS = (DATA.config && DATA.config.periods) || [];
+  render(); setStale(false);
+}
+
+/** 불러오는 동안에도 바뀐 날짜를 바로 보여 준다 */
+function setPending(on, ymd){
+  const box = document.getElementById('date');
+  box.classList.toggle('loading', !!on);
+  if (!on) return;
+  const target = ymd || todayYmd();
+  box.classList.toggle('preview', target !== todayYmd());
+  box.innerHTML = esc(formatDotDate(target)) + '<span class="sub">조회<' + '/span>';
+}
+
+/**
+ * @param {boolean} useCache 캐시에 있으면 먼저 그리고 뒤에서 갱신한다
+ * @param {boolean} prefetch 끝난 뒤 앞뒤 하루를 미리 받아 둔다
+ */
+async function load(useCache, prefetch){
+  const target = VIEW_DATE;
+  const seq = ++loadSeq;
+  const hit = dayCache[dayKey(target)];
+
+  if (useCache && hit){
+    showDay(hit.data);
+    setPending(false);
+    if (Date.now() - hit.at >= CACHE_TTL_MS) revalidate(target, seq);
+    if (prefetch) queuePrefetch(target);
+    return;
+  }
+
+  setPending(true, target);
   try{
-    let url = API + '?type=all&grade=' + encodeURIComponent(GRADE)
-                  + '&class=' + encodeURIComponent(CLASS);
-    if (VIEW_DATE) url += '&date=' + encodeURIComponent(VIEW_DATE);
-    const res = await fetch(url, { cache:'no-store' });
-    const body = await res.json();
-    if (!body.ok) throw new Error(body.error || '응답 오류');
-    DATA = body.data;
-    PERIODS = (DATA.config && DATA.config.periods) || [];
-    lastOkAt = Date.now();
-    render(); setStale(false);
+    // 화살표를 연달아 누를 때 지나친 날짜까지 서버에 묻지 않도록 잠깐 기다린다
+    await new Promise(function(done){ setTimeout(done, 180); });
+    if (seq !== loadSeq) return;
+
+    const data = await fetchDay(target);
+    if (seq !== loadSeq) return;          // 그새 날짜가 또 바뀌었으면 버린다
+    showDay(data);
   }catch(err){
     console.error('불러오기 실패', err);
     setStale(Date.now() - lastOkAt > REFRESH_MS * 2.5);
+  }finally{
+    if (seq === loadSeq) setPending(false);
+  }
+  if (prefetch) queuePrefetch(target);
+}
+
+/** 캐시로 먼저 그린 뒤 조용히 최신 값으로 바꿔치기 */
+async function revalidate(ymd, seq){
+  try{
+    const data = await fetchDay(ymd);
+    if (seq === loadSeq && VIEW_DATE === ymd) showDay(data);
+  }catch(err){
+    console.error('갱신 실패', err);
   }
 }
+
+/** 앞뒤 하루 미리 받기 — 화면을 그린 뒤 한숨 쉬고 하나씩 */
+function queuePrefetch(ymd){
+  clearTimeout(prefetchTimer);
+  const base = ymd || todayYmd();
+  prefetchTimer = setTimeout(async function(){
+    for (const step of [1, -1]){
+      const next = shiftYmd(base, step);
+      await prefetchDay(next === todayYmd() ? null : next);
+    }
+  }, 1200);
+}
+
+async function prefetchDay(ymd){
+  const key = dayKey(ymd);
+  const hit = dayCache[key];
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return;
+  if (prefetching[key]) return;
+  prefetching[key] = true;
+  try{
+    await fetchDay(ymd);
+  }catch(err){
+    /* 미리 받기 실패는 조용히 넘어간다 — 실제 조회 때 다시 시도한다 */
+  }finally{
+    delete prefetching[key];
+  }
+}
+
 function setStale(on){ document.getElementById('stale').classList.toggle('show', on); }
 
 function render(){
@@ -575,7 +684,8 @@ function render(){
 
 function renderDate(){
   const d = DATA.date;
-  document.getElementById('date').textContent = formatDotDate(d, DATA.weekday) + ' 조회';
+  document.getElementById('date').innerHTML =
+    esc(formatDotDate(d, DATA.weekday)) + '<span class="sub">조회<' + '/span>';
   const on = isPreview();
   document.getElementById('date').classList.toggle('preview', on);
   const btn = document.getElementById('goToday');
@@ -837,8 +947,8 @@ function renderWeek(){
   const days = w.value, shown = DATA.date;
   const mon = days[0], fri = days[Math.min(4, days.length - 1)];
   document.querySelector('#weekTitle span').textContent =
-    '주간 시간표(' + shortDate(mon.date) + '(' + mon.weekday + ')~'
-                 + shortDate(fri.date) + '(' + fri.weekday + '))';
+    '주간 시간표(' + formatDotDate(mon.date, mon.weekday) + '~'
+                 + formatDotDate(fri.date, fri.weekday) + ')';
 
   let maxP = 7;
   days.forEach(function(d){
