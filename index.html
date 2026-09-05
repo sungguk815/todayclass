@@ -117,6 +117,8 @@ svg{ display:block; }
 .mealcard .shotbox img{ width:100%; height:100%; object-fit:cover; display:block; }
 .mealcard .shotbox .empty{ font-size:1.05rem; font-weight:800; color:var(--soft);
   text-align:center; padding:.6rem; line-height:1.35; }
+.mealcard .kcal{ margin-left:.35rem; font-size:1.15rem; font-weight:900;
+  color:var(--note); letter-spacing:-.02em; }
 
 /* ── 하단 고정 띠 : 다가오는 일정 (항상 화면 맨 아래) ──── */
 .calbar{
@@ -430,12 +432,23 @@ function renderSlots(){
 /* ── 급식 ──────────────────────────────────────────────── */
 function renderMeal(){
   const box = document.getElementById('mealBody');
+  const title = document.getElementById('mealTitle');
+  const mealLabel = isPreview() ? '급식' : '오늘 급식';
   const m = DATA.meal;
-  if (m && !m.ok){ box.innerHTML = '<div class="none">급식을 불러오지 못했습니다</div>'; return; }
+  if (m && !m.ok){
+    title.innerHTML = ICON.meal + '<span>' + mealLabel + '</span>';
+    box.innerHTML = '<div class="none">급식을 불러오지 못했습니다</div>';
+    return;
+  }
   if (!m || !m.value || !m.value.length){
-    box.innerHTML = '<div class="none">' + emptyWord() + ' 급식 정보가 없습니다</div>'; return;
+    title.innerHTML = ICON.meal + '<span>' + mealLabel + '</span>';
+    box.innerHTML = '<div class="none">' + emptyWord() + ' 급식 정보가 없습니다</div>';
+    return;
   }
   const lunch = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
+  const kcal = String(lunch.kcal || '').trim();
+  title.innerHTML = ICON.meal + '<span>' + mealLabel + '</span>'
+    + (kcal ? '<span class="kcal">' + esc(kcal) + '</span>' : '');
   const items = (lunch.dishes || []).slice(0, MAX_MEAL)
     .map(function(x){ return '<li>' + esc(x.name) + '</li>'; }).join('');
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
