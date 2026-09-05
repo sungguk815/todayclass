@@ -35,10 +35,9 @@ body{
   font-family: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   font-weight: 500;
   -webkit-font-smoothing: antialiased;
-  cursor: default;
+  cursor: none;                 /* 전자칠판에 마우스 커서 노출 방지 */
   user-select: none;
 }
-body.idle{ cursor: none; }          /* 5초간 조작 없으면 커서 감춤 */
 
 /* ── 전체 골격 ─────────────────────────────────────────── */
 #app{
@@ -63,24 +62,7 @@ body.idle{ cursor: none; }          /* 5초간 조작 없으면 커서 감춤 */
 }
 .head .room{ font-size:1.9rem; font-weight:700; letter-spacing:-.01em; }
 .head .app{ font-size:1.1rem; color:var(--chalk-dim); font-weight:500; }
-.head .date{ font-size:1.5rem; color:var(--chalk-dim); font-weight:600; min-width:9.5rem; text-align:right; }
-
-/* 날짜 이동 */
-.head .nav{ display:flex; align-items:center; gap:.5rem; }
-.navbtn{
-  font:inherit; font-size:1.5rem; font-weight:700; line-height:1;
-  width:2.6rem; height:2.6rem;
-  border-radius:.4rem; border:1px solid var(--line);
-  background:transparent; color:var(--chalk-dim); cursor:pointer;
-}
-.navbtn:hover, .navbtn:focus-visible{ color:var(--chalk); border-color:var(--chalk-dim); outline:none; }
-.navbtn.today{ width:auto; padding:0 1rem; font-size:1.1rem; }
-.head .preview{
-  font-size:1rem; font-weight:800; letter-spacing:.02em;
-  color:var(--board); background:var(--now);
-  padding:.2rem .65rem; border-radius:.25rem;
-}
-[hidden]{ display:none !important; }
+.head .date{ font-size:1.5rem; color:var(--chalk-dim); font-weight:600; }
 
 /* ── 왼쪽: 지금 + 급식 ─────────────────────────────────── */
 .main{ grid-area:main; display:flex; flex-direction:column; gap:1.4rem; min-height:0; }
@@ -215,13 +197,7 @@ body.idle{ cursor: none; }          /* 5초간 조작 없으면 커서 감춤 */
   <header class="head">
     <div class="room" id="room">—</div>
     <div class="app">오늘의 교실</div>
-    <div class="nav">
-      <span class="preview" id="preview" hidden>미리보기</span>
-      <button class="navbtn" id="prevDay" aria-label="이전 날짜">‹</button>
-      <div class="date" id="date">—</div>
-      <button class="navbtn" id="nextDay" aria-label="다음 날짜">›</button>
-      <button class="navbtn today" id="goToday" hidden>오늘</button>
-    </div>
+    <div class="date" id="date">—</div>
   </header>
 
   <div class="main">
@@ -278,19 +254,15 @@ body.idle{ cursor: none; }          /* 5초간 조작 없으면 커서 감춤 */
 /* ============================================================
    설정 — 배포 후 이 값만 채우면 됩니다
    ============================================================ */
-const API = 'PASTE_YOUR_GAS_EXEC_URL_HERE';   // GAS 웹 앱 /exec URL
+const API = 'https://script.google.com/macros/s/AKfycbxfa2h5lJZQjCqRFfrQ3wcACVrJcy9yDPqZKpvEsrHkoA8vCjnAnOxJkenKFKmIfCRi/exec';   // GAS 웹 앱 /exec URL
 
 const REFRESH_MS = 3 * 60 * 1000;   // 데이터 갱신 주기 (3분)
-const RETURN_MS  = 2 * 60 * 1000;   // 다른 날짜를 보다가 오늘로 자동 복귀
 const HIDE_EVENTS = ['토요휴업일', '재량휴업일', '일요일'];   // 화면에서 뺄 일정
 
 /* ── 학급 설정 (localStorage 또는 ?grade=3&class=5) ──────── */
 const qs = new URLSearchParams(location.search);
 let GRADE = qs.get('grade') || localStorage.getItem('grade');
 let CLASS = qs.get('class') || localStorage.getItem('class');
-
-let VIEW_DATE = qs.get('date') || null;   // null이면 오늘
-let returnTimer = null;
 
 let DATA = null;        // 마지막으로 성공한 응답
 let PERIODS = [];       // 교시 시간표
@@ -304,62 +276,10 @@ init();
 function init(){
   if (!GRADE || !CLASS) { showSetup(); return; }
   document.getElementById('room').textContent = GRADE + '학년 ' + CLASS + '반';
-
-  bindDateNav();
-  bindIdleCursor();
-
   load();
   setInterval(load, REFRESH_MS);
   tick();
   setInterval(tick, 1000);
-}
-
-/* ── 날짜 이동 ─────────────────────────────────────────── */
-function bindDateNav(){
-  document.getElementById('prevDay').addEventListener('click', () => moveDay(-1));
-  document.getElementById('nextDay').addEventListener('click', () => moveDay(+1));
-  document.getElementById('goToday').addEventListener('click', () => goToday());
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'ArrowLeft')  moveDay(-1);
-    if (e.key === 'ArrowRight') moveDay(+1);
-    if (e.key === 'Escape' || e.key === 'Home') goToday();
-  });
-}
-
-function moveDay(step){
-  const base = VIEW_DATE || (DATA && DATA.date) || todayYmd();
-  VIEW_DATE = shiftYmd(base, step);
-  if (VIEW_DATE === todayYmd()) VIEW_DATE = null;
-  armReturn();
-  load();
-}
-
-function goToday(){
-  VIEW_DATE = null;
-  clearTimeout(returnTimer);
-  load();
-}
-
-/** 다른 날짜를 열어둔 채 자리를 뜨면 저절로 오늘로 돌아온다 */
-function armReturn(){
-  clearTimeout(returnTimer);
-  if (VIEW_DATE) returnTimer = setTimeout(goToday, RETURN_MS);
-}
-
-function isPreview(){ return !!VIEW_DATE && VIEW_DATE !== todayYmd(); }
-
-/* ── 조작이 없으면 커서를 감춘다 ───────────────────────── */
-function bindIdleCursor(){
-  let t = null;
-  const hide = () => document.body.classList.add('idle');
-  const show = () => {
-    document.body.classList.remove('idle');
-    clearTimeout(t); t = setTimeout(hide, 5000);
-  };
-  ['mousemove','touchstart','keydown'].forEach(ev =>
-    document.addEventListener(ev, show, { passive:true }));
-  t = setTimeout(hide, 5000);
 }
 
 /* ============================================================
@@ -367,10 +287,8 @@ function bindIdleCursor(){
    ============================================================ */
 async function load(){
   try{
-    let url = API + '?type=all&grade=' + encodeURIComponent(GRADE)
-                  + '&class=' + encodeURIComponent(CLASS);
-    if (VIEW_DATE) url += '&date=' + encodeURIComponent(VIEW_DATE);
-
+    const url = API + '?type=all&grade=' + encodeURIComponent(GRADE)
+                    + '&class=' + encodeURIComponent(CLASS);
     const res = await fetch(url, { cache: 'no-store' });
     const body = await res.json();
     if (!body.ok) throw new Error(body.error || '응답 오류');
@@ -406,10 +324,6 @@ function renderDate(){
   const d = DATA.date, w = DATA.weekday;
   document.getElementById('date').textContent =
     Number(d.slice(4,6)) + '월 ' + Number(d.slice(6,8)) + '일 ' + w + '요일';
-
-  const on = isPreview();
-  document.getElementById('preview').hidden = !on;
-  document.getElementById('goToday').hidden = !on;
 }
 
 /* ── 급식 ──────────────────────────────────────────────── */
@@ -510,25 +424,12 @@ function tick(){
   document.getElementById('clock').textContent =
     pad(now.getHours()) + ':' + pad(now.getMinutes());
 
+  const slot = currentSlot(now);
   const elP = document.getElementById('nowPeriod');
   const elS = document.getElementById('nowSubject');
   const elL = document.getElementById('leftMin');
   const elN = document.getElementById('next');
   const bar = document.getElementById('bar');
-
-  // 다른 날짜를 보는 중 — 지금 시각과 무관하므로 강조하지 않는다
-  if (isPreview()){
-    const d = (DATA && DATA.date) || VIEW_DATE;
-    elP.textContent = '';
-    elS.className = 'subject quiet';
-    elS.textContent = Number(d.slice(4,6)) + '월 ' + Number(d.slice(6,8)) + '일 시간표';
-    elL.textContent = '';
-    elN.textContent = '';
-    bar.style.width = '0%';
-    return;
-  }
-
-  const slot = currentSlot(now);
 
   if (!slot){
     elP.textContent = '';
@@ -565,7 +466,6 @@ function subjectOf(period){
 }
 
 function currentSlot(now){
-  if (isPreview()) return null;
   const m = minutesOf(now || new Date());
   for (const p of PERIODS){
     const s = toMin(p.start), e = toMin(p.end);
@@ -625,15 +525,6 @@ function showSetup(){
 function toMin(hhmm){
   const [h, m] = String(hhmm).split(':').map(Number);
   return h * 60 + m;
-}
-function todayYmd(){
-  const d = new Date();
-  return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate());
-}
-function shiftYmd(ymd, step){
-  const d = new Date(+ymd.slice(0,4), +ymd.slice(4,6) - 1, +ymd.slice(6,8));
-  d.setDate(d.getDate() + step);
-  return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate());
 }
 function minutesOf(d){ return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
 function pad(n){ return String(n).padStart(2, '0'); }
