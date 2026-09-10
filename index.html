@@ -386,6 +386,13 @@ svg{ display:block; }
    ============================================================ */
 const API = 'https://script.google.com/macros/s/AKfycbxfa2h5lJZQjCqRFfrQ3wcACVrJcy9yDPqZKpvEsrHkoA8vCjnAnOxJkenKFKmIfCRi/exec';
 
+/* 빠른 통로 (Cloudflare Worker)
+   Apps Script는 아무 일을 하지 않아도 왕복에 1.4초가 걸립니다. 이 통로가
+   답을 미리 받아 두었다가 곧바로 내주고, 뒤에서 조용히 새 값을 받아 둡니다.
+   비워 두면 예전처럼 Apps Script를 직접 부릅니다. */
+const EDGE = 'https://today-classroom.sungguk815.workers.dev';
+let edgeOk = true;
+
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
 const HIDE_EVENTS = ['토요휴업일','재량휴업일','일요일'];
@@ -480,7 +487,12 @@ function init(){
     document.getElementById('calNextMonth').innerHTML = ICON.right;
     updateNowLabel();
     bindDateNav(); bindIdleCursor(); bindCalendarModal(); bindZoom();
-    load(false, true);
+
+    // 기기에 남겨 둔 지난번 화면이 있으면 먼저 그려 두고, 최신 값은 뒤에서 받는다
+    const snap = loadSnapshot();
+    if (snap) dayCache[dayKey(null)] = { data:snap, at:0 };
+    load(!!snap, true);
+
     setInterval(function(){ load(false, false); }, REFRESH_MS);
     tick(); setInterval(tick, 1000);
   }catch(err){
@@ -512,8 +524,13 @@ function bindRoomEdit(){
 function bindDateNav(){
   document.getElementById('prevDay').addEventListener('click', function(){ moveDay(-1); });
   document.getElementById('nextDay').addEventListener('click', function(){ moveDay(1); });
-  document.getElementById('goToday').addEventListener('click', goToday);
+  document.getElementById('goToday').addEventListener('click', function(){ goToday(true); });
   document.addEventListener('keydown', function(e){
+    if (e.key === 'F5'){                       // 전자칠판 리모컨·키보드용 새로고침
+      e.preventDefault();
+      goToday(true);
+      return;
+    }
     if (e.key === 'Escape'){
       if (closeCalModal()) return;
       if (tipPeriod != null){ hideTip(); return; }
@@ -528,7 +545,7 @@ function bindDateNav(){
     if (document.getElementById('calModal').classList.contains('show')) return;
     if (e.key === 'ArrowLeft') moveDay(-1);
     if (e.key === 'ArrowRight') moveDay(1);
-    if (e.key === 'Home') goToday();
+    if (e.key === 'Home') goToday(true);
   });
 }
 
@@ -539,10 +556,11 @@ function moveDay(step){
   if (VIEW_DATE === todayYmd()) VIEW_DATE = null;
   armReturn(); load(true, true);
 }
-function goToday(){
+/** @param {boolean} force 사람이 직접 누른 경우 — 보관된 값을 건너뛰고 새로 받아온다 */
+function goToday(force){
   hideTip();
   VIEW_DATE = null; clearTimeout(returnTimer);
-  load(true, true);
+  load(true, true, force === true);
 }
 function armReturn(){
   clearTimeout(returnTimer);
@@ -572,20 +590,85 @@ function bindIdleCursor(){
    · 앞뒤 하루를 미리 받아 둬서 날짜 이동이 기다림 없이 넘어가게 한다 */
 function dayKey(ymd){ return (ymd || todayYmd()) + '/' + GRADE + '/' + CLASS; }
 
-function dayUrl(ymd){
-  let url = API + '?type=all&grade=' + encodeURIComponent(GRADE)
-                + '&class=' + encodeURIComponent(CLASS);
-  if (ymd) url += '&date=' + encodeURIComponent(ymd);
-  return url;
+function dayUrl(ymd, viaEdge, fresh){
+  const q = 'grade=' + encodeURIComponent(GRADE) + '&class=' + encodeURIComponent(CLASS)
+          + (ymd ? '&date=' + encodeURIComponent(ymd) : '');
+  if (viaEdge) return EDGE + '/api/all?' + q + (fresh ? '&fresh=1' : '');
+  return API + '?type=all&' + q;
 }
 
-async function fetchDay(ymd){
-  const res = await fetch(dayUrl(ymd), { cache:'no-store' });
+/** 빠른 통로가 말썽이면 잠시 Apps Script로 되돌아간다 */
+function edgeFailed(err){
+  console.warn('빠른 통로 실패 — Apps Script로 직접 부릅니다', err);
+  edgeOk = false;
+  setTimeout(function(){ edgeOk = true; }, 5 * 60 * 1000);
+}
+
+/** @param {boolean} fresh 캐시를 건너뛰고 서버에서 새로 받아온다 */
+async function fetchDay(ymd, fresh){
+  let res = null;
+
+  if (EDGE && edgeOk){
+    try{
+      res = await fetch(dayUrl(ymd, true, fresh), { cache:'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    }catch(err){
+      edgeFailed(err);
+      res = null;
+    }
+  }
+  if (!res) res = await fetch(dayUrl(ymd, false, fresh), { cache:'no-store' });
+
   const body = await res.json();
   if (!body.ok) throw new Error(body.error || '응답 오류');
+
   dayCache[dayKey(ymd)] = { data:body.data, at:Date.now() };
   lastOkAt = Date.now();
+  saveSnapshot(ymd, body.data);
+
+  // 보관해 둔 값을 받은 경우다. 통로가 뒤에서 새 값을 받고 있으니 잠시 뒤 한 번 더 확인한다.
+  if (res.headers.get('x-cache') === 'stale') queueFollowUp(ymd);
+  else delete followUps[dayKey(ymd)];
   return body.data;
+}
+
+/* 앱을 켜자마자 지난번 화면을 먼저 보여 주기 위한 저장 ─────────
+   전자칠판 앱은 껐다 켜는 일이 잦은데, 그때마다 몇 초씩 빈 화면을
+   보지 않도록 마지막으로 본 오늘 화면을 기기에 남겨 둔다. */
+function snapKey(){ return 'snap:' + GRADE + '/' + CLASS; }
+
+function saveSnapshot(ymd, data){
+  if (ymd && ymd !== todayYmd()) return;      // 지나간 날짜를 켤 때 보여 주면 곤란하다
+  try{
+    localStorage.setItem(snapKey(), JSON.stringify({ at:Date.now(), date:data.date, data:data }));
+  }catch(err){ /* 저장 공간이 없으면 그냥 넘어간다 */ }
+}
+
+function loadSnapshot(){
+  try{
+    const snap = JSON.parse(localStorage.getItem(snapKey()) || 'null');
+    if (!snap || !snap.data) return null;
+    if (snap.date !== todayYmd()) return null;              // 날짜가 바뀌었으면 쓰지 않는다
+    if (Date.now() - snap.at > 12 * 60 * 60 * 1000) return null;
+    return snap.data;
+  }catch(err){ return null; }
+}
+
+/** 보관본을 받았을 때, 뒤에서 갱신이 끝날 즈음 한 번 더 받아 온다 */
+const followUps = {};
+function queueFollowUp(ymd){
+  const key = dayKey(ymd);
+  followUps[key] = (followUps[key] || 0) + 1;
+  if (followUps[key] > 2) return;             // 서버가 계속 느리면 매달리지 않는다
+
+  setTimeout(async function(){
+    if (VIEW_DATE !== (ymd || null)) return;
+    const seq = loadSeq;
+    try{
+      const data = await fetchDay(ymd);
+      if (seq === loadSeq && VIEW_DATE === (ymd || null)) showDay(data);
+    }catch(err){ /* 다음 자동 갱신 때 다시 받는다 */ }
+  }, 6000);
 }
 
 function showDay(data){
@@ -607,8 +690,9 @@ function setPending(on, ymd){
 /**
  * @param {boolean} useCache 캐시에 있으면 먼저 그리고 뒤에서 갱신한다
  * @param {boolean} prefetch 끝난 뒤 앞뒤 하루를 미리 받아 둔다
+ * @param {boolean} fresh    보관된 값을 건너뛰고 서버에서 새로 받아온다
  */
-async function load(useCache, prefetch){
+async function load(useCache, prefetch, fresh){
   const target = VIEW_DATE;
   const seq = ++loadSeq;
   const hit = dayCache[dayKey(target)];
@@ -616,7 +700,7 @@ async function load(useCache, prefetch){
   if (useCache && hit){
     showDay(hit.data);
     setPending(false);
-    if (Date.now() - hit.at >= CACHE_TTL_MS) revalidate(target, seq);
+    if (fresh || Date.now() - hit.at >= CACHE_TTL_MS) revalidate(target, seq, fresh);
     if (prefetch) queuePrefetch(target);
     return;
   }
@@ -627,7 +711,7 @@ async function load(useCache, prefetch){
     await new Promise(function(done){ setTimeout(done, 180); });
     if (seq !== loadSeq) return;
 
-    const data = await fetchDay(target);
+    const data = await fetchDay(target, fresh);
     if (seq !== loadSeq) return;          // 그새 날짜가 또 바뀌었으면 버린다
     showDay(data);
   }catch(err){
@@ -640,9 +724,9 @@ async function load(useCache, prefetch){
 }
 
 /** 캐시로 먼저 그린 뒤 조용히 최신 값으로 바꿔치기 */
-async function revalidate(ymd, seq){
+async function revalidate(ymd, seq, fresh){
   try{
-    const data = await fetchDay(ymd);
+    const data = await fetchDay(ymd, fresh);
     if (seq === loadSeq && VIEW_DATE === ymd) showDay(data);
   }catch(err){
     console.error('갱신 실패', err);
@@ -1044,7 +1128,8 @@ async function loadMonthSchedule(){
   const first = y + pad(m) + '01';
   const daysInMonth = new Date(y, m, 0).getDate();
   try{
-    const url = API + '?type=schedule&days=' + daysInMonth + '&date=' + encodeURIComponent(first);
+    const query = 'type=schedule&days=' + daysInMonth + '&date=' + encodeURIComponent(first);
+    const url = (EDGE && edgeOk) ? EDGE + '/api/gas?' + query : API + '?' + query;
     const res = await fetch(url, { cache:'no-store' });
     const json = await res.json();
     if (!json.ok) throw new Error(json.error || '일정 오류');
