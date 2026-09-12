@@ -14,13 +14,12 @@
  *   번호가 그대로면 교실 기기가 옛 화면을 계속 쓸 수 있습니다.
  */
 
-const CACHE = 'todayclass-v5';
+const CACHE = 'todayclass-v7';
 
 /* 앱을 켜는 데 꼭 필요한 것들 */
 const SHELL = [
   './',
-  './index.html',
-  './notice.html'
+  './index.html'
 ];
 
 /* 글꼴처럼 한 번 받아 두면 바뀌지 않는 것 — 받아 둔 것을 먼저 쓴다 */
@@ -59,7 +58,7 @@ self.addEventListener('fetch', event => {
   try { url = new URL(request.url); } catch (err) { return; }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
-  // 급식·시간표·공지는 늘 새 것이어야 한다
+  // 급식·시간표·학사일정은 늘 새 것이어야 한다
   if (hostMatches(url, LIVE_HOSTS)) return;
 
   // 글꼴은 받아 둔 것을 먼저
