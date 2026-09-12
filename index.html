@@ -312,11 +312,6 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
   font-size:1.35rem; font-weight:800; line-height:1.3; }
 .mealcard li::before{ content:''; width:.3rem; height:.3rem; border-radius:50%;
   background:var(--meal); flex:0 0 auto; transform:translateY(-.28em); }
-.mealcard .nutrition{
-  font-size:.8rem; font-weight:700; color:var(--soft); line-height:1.3;
-  letter-spacing:-.01em;
-  display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;
-}
 /* 급식 사진은 4:3이므로 칸도 4:3으로 두고, 잘라내지 않고 전체를 담습니다.
    4:3을 절반 폭에 그대로 넣으면 세로가 먼저 넘치므로 높이로 묶어 둡니다. */
 .mealcard .shotbox{
@@ -372,20 +367,37 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 .mealcard li.more{ color:var(--soft); font-weight:700; }
 .mealcard li.more::before{ background:var(--soft); }
 
-.mealcard .allergy{
-  font-size:.86rem; font-weight:800; color:var(--note); line-height:1.3;
-  letter-spacing:-.01em;
-}
-/* 원산지는 글이 길어 두 줄까지만 보이고 나머지는 접는다 */
-.mealcard .origin{
-  font-size:.78rem; font-weight:700; color:var(--soft); line-height:1.3;
-  letter-spacing:-.01em;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
-}
-/* 세 줄을 옅은 선으로 갈라 두면 어디까지가 무슨 정보인지 한눈에 보입니다 */
-.mealcard .allergy, .mealcard .nutrition, .mealcard .origin{
+/* ── 알레르기 · 영양 · 원산지 ──────────────────────────────
+   글 길이가 날마다 크게 달라 줄 수가 들쭉날쭉하던 자리입니다.
+   이제 셋 다 무조건 한 줄이고, 제목은 왼쪽에 붙박이로 두고
+   내용만 이동자막처럼 왼쪽으로 흐릅니다. 칸에 다 들어가는 짧은 날은
+   흐르지 않고 그냥 서 있습니다. */
+.mealcard{ --marquee-gap:3rem; }
+
+.mealcard .info{
+  display:flex; align-items:baseline; gap:.45rem; min-width:0;
   padding-top:.16rem; border-top:var(--bw) solid var(--line);
+  line-height:1.3; letter-spacing:-.01em;
 }
+.mealcard .info .label{ flex:0 0 auto; font-weight:900; white-space:nowrap; }
+.mealcard .info .scroll{ flex:1 1 auto; min-width:0; overflow:hidden; }
+.mealcard .info .track{ display:flex; width:max-content; gap:var(--marquee-gap); }
+.mealcard .info .track > span{ white-space:nowrap; }
+
+/* 한 벌이 칸보다 짧으면 흐를 이유가 없으니 두 번째 벌을 감춥니다 */
+.mealcard .info:not(.on) .track > span + span{ display:none; }
+.mealcard .info.on .track{
+  will-change:transform;
+  animation:marquee var(--dur, 30s) linear infinite;
+}
+/* 두 벌을 나란히 두고 한 벌 길이만큼 밀면 이어 붙은 것처럼 끝없이 흐릅니다 */
+@keyframes marquee{
+  to{ transform:translateX(calc(-50% - var(--marquee-gap) / 2)); }
+}
+
+.mealcard .info.allergy  { font-size:.86rem; font-weight:800; color:var(--note); }
+.mealcard .info.nutrition{ font-size:.8rem;  font-weight:700; color:var(--soft); }
+.mealcard .info.origin   { font-size:.78rem; font-weight:700; color:var(--soft); }
 
 /* ── 하단 고정 띠 : 일정 (항상 화면 맨 아래) ──── */
 .calbar{
@@ -493,6 +505,7 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 @media (prefers-reduced-motion:reduce){
   .slot,.slot .bar > i{ transition:none; }
   .head .date.loading{ animation:none; opacity:.6; }
+  .mealcard .info.on .track{ animation:none; }
 }
 </style>
 <script>
@@ -604,12 +617,18 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.09.12-8';
+const APP_VERSION = '2026.09.12-9';
 
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
 const HIDE_EVENTS = ['토요휴업일','재량휴업일','일요일'];
 const MAX_MEAL = 8;
+
+/* 이동자막 : 1초에 흐르는 거리(rem)와 두 벌 사이 간격(rem).
+   간격은 CSS의 --marquee-gap 과 값이 같아야 자막이 매끄럽게 이어집니다.
+   숫자를 키우면 빨라집니다. 교실 뒤에서 읽을 수 있는 속도로 잡았습니다. */
+const MARQUEE_SPEED = 3;
+const MARQUEE_GAP   = 3;
 const MAX_CAL  = 3;
 
 const SUBJECT_COLORS = [
@@ -741,6 +760,7 @@ let tipPeriod = null, tipSticky = false, tipTimer = null;
    남은 시간과 진행바만 갈아끼웁니다. */
 let slotSig = '';
 let dataStamp = 0;
+let mealHtml = '';        // 급식 칸을 쓸데없이 다시 만들지 않기 위한 표시
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const dayCache = {};      // 날짜별로 받아온 응답
@@ -1384,6 +1404,7 @@ function applyZoom(toast){
   try{ localStorage.setItem('zoom', String(ZOOM)); }catch(err){}
   if (toast) showZoomToast();
   syncTip();
+  setupMarquee();
 }
 function nudgeZoom(step){
   const next = clampZoom(ZOOM + step);
@@ -1432,6 +1453,7 @@ function bindZoom(){
   }, { passive:true });
 
   window.addEventListener('resize', syncTip);
+  window.addEventListener('resize', setupMarquee);
   applyZoom(false);
 }
 
@@ -1444,11 +1466,13 @@ function renderMeal(){
   if (m && !m.ok){
     title.innerHTML = ICON.meal + '<span>' + mealLabel + '<' + '/span>';
     box.innerHTML = '<div class="none">급식을 불러오지 못했습니다<' + '/div>';
+    mealHtml = '';
     return;
   }
   if (!m || !m.value || !m.value.length){
     title.innerHTML = ICON.meal + '<span>' + mealLabel + '<' + '/span>';
     box.innerHTML = '<div class="none">' + emptyWord() + ' 급식 정보가 없습니다<' + '/div>';
+    mealHtml = '';
     return;
   }
   const lunch = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
@@ -1482,12 +1506,54 @@ function renderMeal(){
       + '<' + '/div>'
     : '<div class="shotbox"><div class="empty">이미지가 없습니다<' + '/div><' + '/div>';
 
-  box.innerHTML = '<div class="body">'
+  const html = '<div class="body">'
     +   '<div class="top"><ul>' + items + '<' + '/ul>' + photo + '<' + '/div>'
-    +   (allergyNote   ? '<div class="allergy">'   + esc(allergyNote)   + '<' + '/div>' : '')
-    +   (nutritionNote ? '<div class="nutrition">' + esc(nutritionNote) + '<' + '/div>' : '')
-    +   (originNote    ? '<div class="origin">원산지 ' + esc(originNote) + '<' + '/div>' : '')
+    +   infoRow('allergy',   '알레르기', allergyNote)
+    +   infoRow('nutrition', '영양',     nutritionNote)
+    +   infoRow('origin',    '원산지',   originNote)
     + '<' + '/div>';
+
+  // 내용이 그대로면 손대지 않습니다. 3분마다 다시 만들면 흐르던 자막이
+  // 처음으로 되돌아가고, 급식 사진도 다시 받느라 한 번 깜빡입니다.
+  if (html === mealHtml) return;
+  mealHtml = html;
+  box.innerHTML = html;
+  setupMarquee();
+}
+
+/** 제목은 붙박이, 내용은 흐르는 한 줄 */
+function infoRow(cls, label, text){
+  if (!text) return '';
+  const one = '<span>' + esc(text) + '<' + '/span>';
+  return '<div class="info ' + cls + '">'
+       +   '<b class="label">' + label + '<' + '/b>'
+       +   '<div class="scroll"><div class="track">'
+       +     one + '<span aria-hidden="true">' + esc(text) + '<' + '/span>'
+       +   '<' + '/div><' + '/div>'
+       + '<' + '/div>';
+}
+
+/**
+ * 내용이 칸보다 길 때만 흐르게 하고, 길이에 맞춰 시간을 정합니다.
+ * 시간을 고정해 두면 짧은 글은 굼뜨고 긴 글은 쏜살같이 지나가서
+ * 읽을 수가 없습니다. 그래서 '1초에 몇 rem'으로 속도를 고정합니다.
+ */
+function setupMarquee(){
+  const rows = document.querySelectorAll('#mealBody .info');
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+
+  Array.prototype.forEach.call(rows, function(row){
+    const scroll = row.querySelector('.scroll');
+    const first  = row.querySelector('.track > span');
+    if (!scroll || !first) return;
+
+    const need = first.scrollWidth > scroll.clientWidth + 1;
+    row.classList.toggle('on', need);
+    if (!need){ row.style.removeProperty('--dur'); return; }
+
+    const dist = first.scrollWidth + MARQUEE_GAP * rem;
+    row.style.setProperty('--dur', (dist / (MARQUEE_SPEED * rem)).toFixed(1) + 's');
+  });
 }
 
 /** 나이스는 메뉴 이름 끝에 별표를 붙여 오는 일이 있습니다 */
@@ -1509,7 +1575,7 @@ function allergyLegend(dishes){
   });
   const keys = Object.keys(seen).map(Number).sort(function(a, b){ return a - b; });
   if (!keys.length) return '';
-  return '알레르기 ' + keys.map(function(k){ return k + ' ' + ALLERGY_NAMES[k]; }).join(' · ');
+  return keys.map(function(k){ return k + ' ' + ALLERGY_NAMES[k]; }).join(' · ');
 }
 function formatNutritionNote(list){
   if (!list || !list.length) return '';
@@ -1524,6 +1590,7 @@ function mealPhotoFallback(img){
   box.classList.remove('zoomable');            // 없는 사진을 크게 볼 수는 없다
   box.removeAttribute('title');
   box.innerHTML = '<div class="empty">이미지가 없습니다<' + '/div>';
+  mealHtml = '';                               // 다음 갱신 때 한 번 더 받아 본다
 }
 
 /* ── 급식 사진 크게 보기 ────────────────────────────────────
