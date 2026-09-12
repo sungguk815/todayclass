@@ -341,12 +341,6 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
   letter-spacing:-.01em;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.mealcard .dinner{
-  margin-top:.1rem; padding-top:.28rem; border-top:var(--bw) solid var(--line);
-  font-size:.98rem; font-weight:800; color:var(--soft); line-height:1.35;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
-}
-.mealcard .dinner b{ color:var(--meal); font-weight:900; margin-right:.35rem; }
 
 /* ── 하단 고정 띠 : 일정 (항상 화면 맨 아래) ──── */
 .calbar{
@@ -571,7 +565,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.09.12';
+const APP_VERSION = '2026.09.12-2';
 
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
@@ -1411,8 +1405,7 @@ function renderMeal(){
     box.innerHTML = '<div class="none">' + emptyWord() + ' 급식 정보가 없습니다<' + '/div>';
     return;
   }
-  const lunch  = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
-  const dinner = m.value.find(function(x){ return /석식/.test(x.type); });
+  const lunch = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
   const kcal = String(lunch.kcal || '').trim();
   title.innerHTML = ICON.meal + '<span>' + mealLabel + '<' + '/span>'
     + (kcal ? '<span class="kcal">' + esc(kcal) + '<' + '/span>' : '');
@@ -1434,7 +1427,6 @@ function renderMeal(){
   const allergyNote   = allergyLegend(dishes);
   const nutritionNote = formatNutritionNote(lunch.nutrition);
   const originNote    = String(lunch.origin || '').trim();
-  const dinnerNote    = dinner ? dishNames(dinner.dishes) : '';
 
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
   const photo = photoUrl
@@ -1445,17 +1437,12 @@ function renderMeal(){
     + (allergyNote   ? '<div class="allergy">'   + esc(allergyNote)   + '<' + '/div>' : '')
     + (nutritionNote ? '<div class="nutrition">' + esc(nutritionNote) + '<' + '/div>' : '')
     + (originNote    ? '<div class="origin">원산지 ' + esc(originNote) + '<' + '/div>' : '')
-    + (dinnerNote    ? '<div class="dinner"><b>석식<' + '/b>' + esc(dinnerNote) + '<' + '/div>' : '')
     + '<' + '/div>' + photo + '<' + '/div>';
 }
 
 /** 나이스는 메뉴 이름 끝에 별표를 붙여 오는 일이 있습니다 */
 function dishName(x){
   return String((x && x.name) || '').replace(/[*]+$/, '').trim();
-}
-
-function dishNames(dishes){
-  return (dishes || []).map(dishName).filter(Boolean).join(', ');
 }
 
 /**
