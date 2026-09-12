@@ -14,7 +14,7 @@
  *   번호가 그대로면 교실 기기가 옛 화면을 계속 쓸 수 있습니다.
  */
 
-const CACHE = 'todayclass-v4';
+const CACHE = 'todayclass-v5';
 
 /* 앱을 켜는 데 꼭 필요한 것들 */
 const SHELL = [

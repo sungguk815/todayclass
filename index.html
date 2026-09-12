@@ -606,7 +606,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.09.12-4';
+const APP_VERSION = '2026.09.12-5';
 
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
@@ -1095,7 +1095,9 @@ function renderDate(){
   document.getElementById('date').classList.toggle('preview', on);
   const btn = document.getElementById('goToday');
   if (on) btn.removeAttribute('data-off'); else btn.setAttribute('data-off', '');
-  document.querySelector('#lineTitle span').textContent = '수업 시간표';
+  const when = viewedDateLabel();
+  document.querySelector('#lineTitle span').textContent =
+    (when ? when + ' ' : '') + '수업 시간표';
 }
 
 function renderSlots(){
@@ -1439,7 +1441,8 @@ function bindZoom(){
 function renderMeal(){
   const box = document.getElementById('mealBody');
   const title = document.getElementById('mealTitle');
-  const mealLabel = '점심 식단';
+  const when = viewedDateLabel();
+  const mealLabel = (when ? esc(when) + ' ' : '') + '점심 식단';
   const m = DATA.meal;
   if (m && !m.ok){
     title.innerHTML = ICON.meal + '<span>' + mealLabel + '<' + '/span>';
@@ -1888,6 +1891,17 @@ function weekdayOf(ymd){
 }
 function formatDotDate(ymd, weekday){
   return shortDate(ymd) + '.(' + (weekday || weekdayOf(ymd)) + ')';
+}
+
+/**
+ * 지금 화면에 그려진 날짜를 '9.14.(월)' 모양으로 돌려줍니다.
+ *
+ * 화살표로 다른 날을 들춰보다 보면, 화면에 뜬 시간표·급식이 오늘 것인지
+ * 들춰본 날 것인지 헷갈립니다. 그래서 두 칸의 제목 앞에 날짜를 붙입니다.
+ */
+function viewedDateLabel(){
+  if (!DATA || !DATA.date) return '';
+  return formatDotDate(DATA.date, DATA.weekday);
 }
 function shiftYmd(ymd, step){
   const d = new Date(+ymd.slice(0,4), +ymd.slice(4,6)-1, +ymd.slice(6,8));
