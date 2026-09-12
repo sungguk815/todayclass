@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오늘의 교실 — 공지 올리기</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.css">
+<style>
+/* 교실 화면(index.html)과 같은 색 이름을 쓰되, 휴대폰에서 읽기 좋게 크기만 다릅니다 */
+:root{
+  --bg:#EEF3F9; --card:#FFFFFF; --ink:#111C33; --soft:#6E7E99; --line:#DFE7F1;
+  --note:#E11D48; --accent:#0B5CAB; --ok:#12A150; --tone:#EDF2F8;
+  --btn:#111C33; --btn-ink:#FFFFFF;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0B1020; --card:#141A2E; --ink:#EAF0FF; --soft:#8D9BC0; --line:#26304C;
+    --note:#FF5B7F; --accent:#7AA2FF; --ok:#3DD68C; --tone:#1A2136;
+    --btn:#7AA2FF; --btn-ink:#0B1020;
+  }
+}
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+/* .card의 display:flex가 브라우저 기본 [hidden] 규칙을 이기므로 못을 박아 둔다 */
+[hidden]{ display:none !important; }
+body{
+  background:var(--bg); color:var(--ink); min-height:100vh;
+  font-family:Pretendard,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+  font-weight:600; -webkit-font-smoothing:antialiased;
+  padding:1.1rem .9rem 3rem;
+}
+.wrap{ max-width:32rem; margin:0 auto; display:flex; flex-direction:column; gap:.9rem; }
+
+h1{ font-size:1.5rem; font-weight:900; letter-spacing:-.02em; }
+h1 .sub{ display:block; margin-top:.2rem; font-size:.88rem; font-weight:700; color:var(--soft); }
+
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:.8rem;
+  padding:.95rem; display:flex; flex-direction:column; gap:.7rem;
+}
+.card h2{ font-size:1.05rem; font-weight:900; color:var(--soft); }
+
+label{ display:flex; flex-direction:column; gap:.3rem; font-size:.88rem; font-weight:800; color:var(--soft); }
+input, select, textarea{
+  font:inherit; font-size:1.05rem; font-weight:700; color:var(--ink);
+  background:var(--bg); border:1px solid var(--line); border-radius:.5rem;
+  padding:.6rem .7rem; width:100%;
+}
+textarea{ resize:vertical; min-height:5.5rem; line-height:1.45; }
+input:focus, select:focus, textarea:focus{ outline:2px solid var(--accent); outline-offset:-1px; }
+
+.row{ display:flex; gap:.6rem; }
+.row > *{ flex:1 1 0; min-width:0; }
+
+button{
+  font:inherit; font-size:1.05rem; font-weight:900; cursor:pointer;
+  border:0; border-radius:.5rem; padding:.7rem 1rem;
+  background:var(--btn); color:var(--btn-ink);
+}
+button:disabled{ opacity:.5; cursor:default; }
+button.ghost{ background:transparent; color:var(--soft); border:1px solid var(--line); }
+button.danger{ background:transparent; color:var(--note); border:1px solid var(--line);
+  font-size:.88rem; padding:.35rem .7rem; }
+
+.count{ font-size:.8rem; font-weight:800; color:var(--soft); text-align:right; }
+.count.over{ color:var(--note); }
+
+.msg{ font-size:.92rem; font-weight:800; padding:.6rem .7rem; border-radius:.5rem; display:none; }
+.msg.show{ display:block; }
+.msg.ok{ background:color-mix(in srgb, var(--ok) 14%, var(--card)); color:var(--ok); }
+.msg.bad{ background:color-mix(in srgb, var(--note) 12%, var(--card)); color:var(--note); }
+
+.item{
+  display:flex; align-items:flex-start; gap:.6rem; padding:.65rem 0;
+  border-top:1px solid var(--line);
+}
+.item:first-child{ border-top:0; }
+.item .body{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:.2rem; }
+.item .text{ font-size:1.05rem; font-weight:800; line-height:1.4; word-break:keep-all; }
+.item .meta{ font-size:.78rem; font-weight:700; color:var(--soft); }
+.tag{
+  flex:0 0 auto; font-size:.72rem; font-weight:900; color:#fff; background:var(--note);
+  padding:.15rem .4rem; border-radius:.25rem; margin-top:.15rem;
+}
+.tag.class{ background:var(--accent); }
+.empty{ font-size:.95rem; font-weight:700; color:var(--soft); text-align:center; padding:1rem 0; }
+
+.hint{ font-size:.8rem; font-weight:700; color:var(--soft); line-height:1.5; }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <h1>공지 올리기
+    <span class="sub">여기에 올린 글이 교실 전자칠판 아래쪽에 뜹니다</span>
+  </h1>
+
+  <!-- ── 처음 한 번만 : 암호와 우리 반 ───────────────────── -->
+  <section class="card" id="setupCard">
+    <h2>처음 설정</h2>
+    <label>쓰기 암호
+      <input type="password" id="token" autocomplete="current-password"
+             placeholder="선생님께 받은 암호">
+    </label>
+    <div class="row">
+      <label>학년 <select id="grade"></select></label>
+      <label>반 <select id="cls"></select></label>
+    </div>
+    <button id="saveSetup">저장하고 시작하기</button>
+    <p class="hint">
+      암호와 학년·반은 이 휴대폰에만 저장됩니다. 다른 사람의 기기에서는
+      다시 넣어야 합니다. 공용 기기에서는 쓰지 마세요.
+    </p>
+  </section>
+
+  <!-- ── 공지 쓰기 ───────────────────────────────────────── -->
+  <section class="card" id="writeCard" hidden>
+    <h2 id="writeTitle">공지 쓰기</h2>
+
+    <label>누구에게
+      <select id="scope">
+        <option value="class">우리 반에만</option>
+        <option value="school">전교에</option>
+      </select>
+    </label>
+
+    <label>내용
+      <textarea id="text" maxlength="300"
+                placeholder="예) 내일 체육복 준비 · 3교시 이동수업 미술실"></textarea>
+    </label>
+    <div class="count" id="count">0 / 300</div>
+
+    <div class="row">
+      <label>며칠 동안
+        <select id="days">
+          <option value="1">오늘만</option>
+          <option value="2">2일</option>
+          <option value="3">3일</option>
+          <option value="7" selected>일주일</option>
+          <option value="14">2주</option>
+          <option value="30">한 달</option>
+        </select>
+      </label>
+      <label>쓴 사람
+        <input type="text" id="author" placeholder="예) 김담임" maxlength="20">
+      </label>
+    </div>
+
+    <div class="msg" id="msg"></div>
+    <button id="send">올리기</button>
+  </section>
+
+  <!-- ── 올라가 있는 공지 ────────────────────────────────── -->
+  <section class="card" id="listCard" hidden>
+    <h2 id="listTitle">지금 떠 있는 공지</h2>
+    <div id="list"><div class="empty">불러오는 중</div></div>
+    <button class="ghost" id="changeRoom">암호·학년·반 다시 설정</button>
+  </section>
+
+</div>
+
+<script>
+/* 공지 저장은 앞단(Worker)을 거치지 않고 Apps Script로 바로 보냅니다.
+   보관해 둘 응답이 아니고, Worker는 쓰기 요청을 중계하지 않기 때문입니다. */
+const API = 'https://script.google.com/macros/s/AKfycbxfa2h5lJZQjCqRFfrQ3wcACVrJcy9yDPqZKpvEsrHkoA8vCjnAnOxJkenKFKmIfCRi/exec';
+
+const STRUCTURE_FALLBACK = { 1:10, 2:10, 3:10 };
+let STRUCTURE = null;
+
+/* 사생활 보호 모드에서는 localStorage에 손대기만 해도 오류가 납니다 */
+function lsGet(key){
+  try{ return localStorage.getItem(key); }catch(err){ return null; }
+}
+function lsSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }catch(err){ return false; }
+}
+
+let TOKEN = lsGet('notice:token') || '';
+let GRADE = lsGet('notice:grade') || '';
+let CLASS = lsGet('notice:class') || '';
+
+const $ = function(id){ return document.getElementById(id); };
+
+init();
+
+/**
+ * 서버 응답을 기다리며 멈추지 않습니다.
+ * 학교 밖이나 신호가 약한 곳에서 열었을 때, 학년·반 목록이 영영 비어 있어
+ * 아무것도 못 하는 일이 없도록 임시 목록으로 먼저 쓸 수 있게 해 둡니다.
+ */
+function init(){
+  $('token').value = TOKEN;
+  $('author').value = lsGet('notice:author') || '';
+  bind();
+
+  STRUCTURE = STRUCTURE_FALLBACK;
+  refillRoom();
+  if (TOKEN && GRADE && CLASS) showMain();
+
+  loadStructure().then(refillRoom);      // 정확한 학급 구성이 오면 다시 채운다
+}
+
+function refillRoom(){
+  fillGrades();
+  if (GRADE) $('grade').value = GRADE;
+  fillClasses();
+  if (CLASS) $('cls').value = CLASS;
+}
+
+function bind(){
+  $('grade').addEventListener('change', fillClasses);
+  $('saveSetup').addEventListener('click', saveSetup);
+  $('changeRoom').addEventListener('click', showSetup);
+  $('send').addEventListener('click', send);
+  $('text').addEventListener('input', function(){
+    const n = $('text').value.length;
+    $('count').textContent = n + ' / 300';
+    $('count').classList.toggle('over', n > 300);
+  });
+}
+
+async function loadStructure(){
+  try{
+    const res = await fetchSoon(API + '?type=config', 8000);
+    const body = await res.json();
+    if (body && body.ok && body.data && body.data.classStructure
+        && Object.keys(body.data.classStructure).length){
+      STRUCTURE = body.data.classStructure;
+    }
+  }catch(err){
+    console.warn('학급 구성을 받지 못했습니다 — 임시 목록으로 보여 줍니다', err);
+  }
+  if (!STRUCTURE) STRUCTURE = STRUCTURE_FALLBACK;
+}
+
+/** 응답이 오지 않는 채로 매달려 있지 않도록 시간을 끊는다 */
+function fetchSoon(url, ms){
+  const options = { cache:'no-store' };
+  if (typeof AbortController === 'undefined') return fetch(url, options);
+
+  const stop = new AbortController();
+  options.signal = stop.signal;
+  const timer = setTimeout(function(){ stop.abort(); }, ms);
+  return fetch(url, options).then(
+    function(res){ clearTimeout(timer); return res; },
+    function(err){ clearTimeout(timer); throw err; }
+  );
+}
+
+function fillGrades(){
+  const g = $('grade');
+  const prev = g.value || GRADE || '';
+  g.innerHTML = '';
+  Object.keys(STRUCTURE).map(Number).sort(function(a, b){ return a - b; })
+    .forEach(function(n){ g.add(new Option(n + '학년', String(n))); });
+  if (prev && g.querySelector('option[value="' + prev + '"]')) g.value = prev;
+}
+
+function fillClasses(){
+  const c = $('cls');
+  const prev = c.value || CLASS || '';
+  const max = STRUCTURE[Number($('grade').value)] || 10;
+  c.innerHTML = '';
+  for (let i = 1; i <= max; i++) c.add(new Option(i + '반', String(i)));
+  if (prev && Number(prev) <= max) c.value = String(prev);
+}
+
+function showSetup(){
+  $('setupCard').hidden = false;
+  $('writeCard').hidden = true;
+  $('listCard').hidden = true;
+}
+
+function showMain(){
+  $('setupCard').hidden = true;
+  $('writeCard').hidden = false;
+  $('listCard').hidden = false;
+  const room = GRADE + '학년 ' + CLASS + '반';
+  $('writeTitle').textContent = '공지 쓰기 — ' + room;
+  $('listTitle').textContent = '지금 떠 있는 공지 — ' + room;
+  $('scope').querySelector('option[value="class"]').textContent = room + '에만';
+  loadList();
+}
+
+function saveSetup(){
+  const token = $('token').value.trim();
+  if (!token){ say('암호를 넣어 주세요', false); return; }
+
+  TOKEN = token;
+  GRADE = $('grade').value;
+  CLASS = $('cls').value;
+  lsSet('notice:token', TOKEN);
+  lsSet('notice:grade', GRADE);
+  lsSet('notice:class', CLASS);
+  showMain();
+}
+
+function say(text, ok){
+  const box = $('msg');
+  box.textContent = text;
+  box.className = 'msg show ' + (ok ? 'ok' : 'bad');
+  if (ok) setTimeout(function(){ box.classList.remove('show'); }, 4000);
+}
+
+/** Apps Script에 쓰기 요청. text/plain으로 보내야 preflight 없이 통과합니다. */
+async function post(payload){
+  const res = await fetch(API, {
+    method : 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body   : JSON.stringify(Object.assign({ token: TOKEN }, payload))
+  });
+  const body = await res.json();
+  if (!body.ok) throw new Error(body.error || '저장하지 못했습니다');
+  return body.data;
+}
+
+async function send(){
+  const text = $('text').value.trim();
+  if (!text){ say('내용을 넣어 주세요', false); return; }
+  if (text.length > 300){ say('300자 이내로 줄여 주세요', false); return; }
+
+  const school = $('scope').value === 'school';
+  const author = $('author').value.trim();
+  lsSet('notice:author', author);
+
+  $('send').disabled = true;
+  $('send').textContent = '올리는 중…';
+  try{
+    await post({
+      action: 'saveNotice',
+      grade : school ? 0 : Number(GRADE),
+      class : school ? 0 : Number(CLASS),
+      text  : text,
+      author: author,
+      days  : Number($('days').value) || 7
+    });
+    $('text').value = '';
+    $('count').textContent = '0 / 300';
+    say('올렸습니다. 교실 화면에 곧 뜹니다.', true);
+    loadList();
+  }catch(err){
+    say(String(err.message || err), false);
+  }finally{
+    $('send').disabled = false;
+    $('send').textContent = '올리기';
+  }
+}
+
+async function remove(id){
+  if (!confirm('이 공지를 내릴까요?')) return;
+  try{
+    await post({ action: 'deleteNotice', id: id });
+    say('내렸습니다.', true);
+    loadList();
+  }catch(err){
+    say(String(err.message || err), false);
+  }
+}
+
+async function loadList(){
+  const box = $('list');
+  box.innerHTML = '<div class="empty">불러오는 중</div>';
+  try{
+    const url = API + '?type=notice&grade=' + encodeURIComponent(GRADE)
+              + '&class=' + encodeURIComponent(CLASS);
+    const res = await fetchSoon(url, 8000);
+    const body = await res.json();
+    if (!body.ok) throw new Error(body.error || '불러오지 못했습니다');
+
+    const list = body.data || [];
+    if (!list.length){
+      box.innerHTML = '<div class="empty">떠 있는 공지가 없습니다</div>';
+      return;
+    }
+
+    box.innerHTML = '';
+    list.forEach(function(x){
+      const school = x.scope === 'school';
+      const item = document.createElement('div');
+      item.className = 'item';
+
+      const tag = document.createElement('span');
+      tag.className = 'tag' + (school ? '' : ' class');
+      tag.textContent = school ? '전교' : '우리 반';
+
+      const body2 = document.createElement('div');
+      body2.className = 'body';
+      const text = document.createElement('div');
+      text.className = 'text';
+      text.textContent = x.text;
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = [x.author, x.expire ? dotDate(x.expire) + '까지' : '']
+        .filter(Boolean).join(' · ');
+      body2.appendChild(text);
+      body2.appendChild(meta);
+
+      const del = document.createElement('button');
+      del.className = 'danger';
+      del.textContent = '내리기';
+      del.addEventListener('click', function(){ remove(x.id); });
+
+      item.appendChild(tag);
+      item.appendChild(body2);
+      item.appendChild(del);
+      box.appendChild(item);
+    });
+  }catch(err){
+    box.innerHTML = '<div class="empty">' + String(err.message || err) + '</div>';
+  }
+}
+
+function dotDate(ymd){
+  const s = String(ymd).replace(/[^0-9]/g, '');
+  if (s.length < 8) return String(ymd);
+  return Number(s.slice(4,6)) + '.' + Number(s.slice(6,8));
+}
+</script>
+</body>
+</html>
