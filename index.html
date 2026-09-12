@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>오늘의 교실</title>
+<title>오늘의 교실 · 동대부중 전자칠판</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.css">
 <style>
 /* ── 색 손잡이 ────────────────────────────────────────────
@@ -33,6 +33,10 @@
   --sun:#E11D48; --sat:#2563EB;
   --btn:#111C33; --btn-ink:#FFFFFF;
 
+  /* 앱 이름(오늘의 교실)과 기능 제목(수업 시간표·점심 식단·주간 시간표) */
+  --brand-a:#1D4ED8; --brand-b:#7C3AED;       /* 앱 이름 : 파랑 → 보라 */
+  --title:#1D4ED8;                             /* 기능 제목 : 앱 이름 첫 색과 같게 */
+
   --r-hero:1.1rem; --r-card:.75rem;
 }
 
@@ -49,6 +53,8 @@ html[data-theme="chalk"]{
   --preview-bg:#4A3B12; --preview-ink:#FFD98A; --ev-ink:#FFD9A0;
   --sun:#FF8A9B; --sat:#8ECBFF;
   --btn:#7FD68A; --btn-ink:#0B2A22;
+  --brand-a:#FFD166; --brand-b:#FF9F6B;       /* 칠판에 노란 분필 → 주황 분필 */
+  --title:#FFD166;
 }
 
 /* ── 테마 ③ 야간 먹빛 : 불 꺼진 교실에서 눈이 편한 어둠 ── */
@@ -64,6 +70,8 @@ html[data-theme="night"]{
   --preview-bg:#3A2E12; --preview-ink:#FFD98A; --ev-ink:#FFC98A;
   --sun:#FF7A93; --sat:#8AB6FF;
   --btn:#7AA2FF; --btn-ink:#0B1020;
+  --brand-a:#8AB4FF; --brand-b:#C3A6FF;       /* 밤하늘 파랑 → 연보라 */
+  --title:#8AB4FF;
 }
 
 /* ── 테마 ④ 한지 종이 : 따뜻한 종이에 먹과 단청 ────────── */
@@ -79,6 +87,8 @@ html[data-theme="hanji"]{
   --preview-bg:#F3DDA8; --preview-ink:#6B4A12; --ev-ink:#96601A;
   --sun:#C0392B; --sat:#2F6DA8;
   --btn:#2E2A24; --btn-ink:#FDF9F0;
+  --brand-a:#1F4E8C; --brand-b:#0A6A69;       /* 한지 위에 쪽빛 → 청록 */
+  --title:#1F4E8C;
 }
 
 /* ── 테마 ⑤ 크고 선명 : 교실 맨 뒤에서도 읽히는 고대비 ─── */
@@ -95,6 +105,8 @@ html[data-theme="bold"]{
   --preview-bg:#FFE566; --preview-ink:#5A3A00; --ev-ink:#7A3E00;
   --sun:#D40000; --sat:#0033CC;
   --btn:#000000; --btn-ink:#FFFFFF;
+  --brand-a:#0033CC; --brand-b:#6B00B8;       /* 고대비에서도 짙게 */
+  --title:#0033CC;
 }
 html[data-theme="bold"] .weekcard td{ font-weight:800; }
 html[data-theme="bold"] .weekcard td.today{ font-weight:900; }
@@ -129,6 +141,27 @@ svg{ display:block; }
 /* ── 머리말 ────────────────────────────────────────────── */
 .head{ grid-area:head; display:flex; align-items:center; justify-content:space-between; gap:1rem;
   padding:0 .3rem; }
+/* 머리말 왼쪽 묶음 : [오늘의 교실 / 동대부중 전자칠판] │ [3학년 5반] */
+.head .left{ display:flex; align-items:center; gap:.9rem; min-width:0; }
+.head .sep{ flex:0 0 auto; width:var(--bw); align-self:stretch; margin:.25rem 0; background:var(--line); }
+
+/* 앱 이름 : 두 줄을 가운데로 맞춘다 */
+.brand{ display:flex; flex-direction:column; align-items:center; text-align:center; line-height:1.02; }
+.brand .name{ font-weight:900; letter-spacing:-.035em; white-space:nowrap; color:var(--brand-a); }
+.brand .school{ font-weight:800; letter-spacing:.02em; white-space:nowrap; color:var(--soft); }
+/* 글자를 두 색으로 칠할 수 있는 브라우저에서만 그라데이션을 입힌다.
+   못 칠하는 곳에서 글자가 투명해져 사라지는 일이 없도록 조건을 건다. */
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .brand .name{
+    background:linear-gradient(90deg, var(--brand-a), var(--brand-b));
+    -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+}
+.head .brand{ flex:0 0 auto; }
+.head .brand .name{ font-size:1.75rem; }
+.head .brand .school{ margin-top:.14rem; font-size:.74rem; }
+
 .head .room{ display:flex; align-items:center; gap:.5rem;
   font-size:2rem; font-weight:900; letter-spacing:-.02em; cursor:pointer; }
 .head .room svg{ width:1.7rem; height:1.7rem; color:var(--soft); }
@@ -161,6 +194,8 @@ svg{ display:block; }
   font-size:1.22rem; font-weight:900; color:var(--soft); }
 .ct svg{ width:1.25rem; height:1.25rem; }
 .ct.g{ color:var(--meal); } .ct.o{ color:var(--cal); } .ct.r{ color:var(--note); }
+/* 기능 제목 : 수업 시간표 · 점심 식단 · 주간 시간표를 한 색으로 맞춰 도드라지게 */
+.ct.fn{ color:var(--title); }
 .ct .cal-icon{
   display:grid; place-items:center; width:1.8rem; height:1.8rem; padding:0;
   border:0; border-radius:.4rem; background:transparent; color:inherit; cursor:pointer;
@@ -443,6 +478,9 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
   align-items:center; justify-content:center; gap:1.7rem; cursor:auto; z-index:30; }
 #setup.show{ display:flex; }
 #setup h1{ font-size:2.8rem; font-weight:900; letter-spacing:-.03em; }
+#setup .brand{ margin-bottom:.4rem; }
+#setup .brand .name{ font-size:3.8rem; }
+#setup .brand .school{ margin-top:.35rem; font-size:1.25rem; }
 #setup p{ font-size:1.4rem; font-weight:700; color:var(--soft); }
 #setup .rows{ display:flex; gap:1rem; }
 #setup select{ font:inherit; font-size:2rem; font-weight:900; padding:.55rem 1.2rem;
@@ -524,7 +562,14 @@ try{
 <body>
 <div id="app">
   <header class="head">
-    <div class="room"><span id="roomIcon"></span><span id="room">—</span></div>
+    <div class="left">
+      <div class="brand">
+        <b class="name">오늘의 교실</b>
+        <small class="school">동대부중 전자칠판</small>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
+      <div class="room"><span id="roomIcon"></span><span id="room">—</span></div>
+    </div>
     <div class="now">
       <span class="nowlabel" id="nowLabel">—</span>
       <span class="clock" id="clock">--:--</span>
@@ -538,17 +583,17 @@ try{
   </header>
 
   <section class="line">
-    <div class="ct" id="lineTitle"></div>
+    <div class="ct fn" id="lineTitle"></div>
     <div id="slots"><div class="none">불러오는 중</div></div>
   </section>
 
   <section class="card mealcard">
-    <div class="ct g" id="mealTitle"></div>
+    <div class="ct fn" id="mealTitle"></div>
     <div id="mealBody"><div class="none">불러오는 중</div></div>
   </section>
 
   <section class="card weekcard">
-    <div class="ct" id="weekTitle"></div>
+    <div class="ct fn" id="weekTitle"></div>
     <div id="weekBody"></div>
   </section>
 </div>
@@ -576,6 +621,10 @@ try{
 <div id="stale">연결 끊김 — 마지막 정보 표시 중</div>
 
 <div id="setup">
+  <div class="brand">
+    <b class="name">오늘의 교실</b>
+    <small class="school">동대부중 전자칠판</small>
+  </div>
   <h1>이 교실은 몇 학년 몇 반인가요?</h1>
   <p id="setupHint">한 번만 설정하면 다음부터는 바로 시작합니다</p>
   <div class="rows"><select id="selGrade"></select><select id="selClass"></select></div>
@@ -617,7 +666,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.09.12-9';
+const APP_VERSION = '2026.09.12-10';
 
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
