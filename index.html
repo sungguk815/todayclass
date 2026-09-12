@@ -500,7 +500,7 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
    고른 테마 > 학교가 정한 기본값 > 맨 처음 한 번 쓰는 값(BOOT_THEME) 순입니다.
    BOOT_THEME은 서버 답이 오기 전 첫 그림에만 쓰이고, 곧바로 학교 기본값으로
    덮어써집니다. 진짜 설정은 Code.gs의 CONFIG.DEFAULT_THEME 한 곳뿐입니다. */
-var BOOT_THEME = 'bold';
+var BOOT_THEME = 'hanji';
 try{
   var t = localStorage.getItem('theme') || localStorage.getItem('theme:default') || BOOT_THEME;
   if (t && t !== 'light') document.documentElement.dataset.theme = t;
@@ -604,7 +604,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.09.12-7';
+const APP_VERSION = '2026.09.12-8';
 
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
