@@ -496,12 +496,15 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 }
 </style>
 <script>
-/* 테마를 화면이 그려지기 전에 입혀서 밝은 화면이 번쩍이지 않게 합니다.
-   이 교실에서 직접 고른 테마가 있으면 그것을, 없으면 학교가 정한 기본값을 씁니다. */
+/* 테마를 화면이 그려지기 전에 입혀서 엉뚱한 화면이 번쩍이지 않게 합니다.
+   고른 테마 > 학교가 정한 기본값 > 맨 처음 한 번 쓰는 값(BOOT_THEME) 순입니다.
+   BOOT_THEME은 서버 답이 오기 전 첫 그림에만 쓰이고, 곧바로 학교 기본값으로
+   덮어써집니다. 진짜 설정은 Code.gs의 CONFIG.DEFAULT_THEME 한 곳뿐입니다. */
+var BOOT_THEME = 'bold';
 try{
-  var t = localStorage.getItem('theme') || localStorage.getItem('theme:default');
+  var t = localStorage.getItem('theme') || localStorage.getItem('theme:default') || BOOT_THEME;
   if (t && t !== 'light') document.documentElement.dataset.theme = t;
-}catch(e){}
+}catch(e){ document.documentElement.dataset.theme = BOOT_THEME; }
 </script>
 </head>
 
@@ -603,7 +606,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.09.12-3';
+const APP_VERSION = '2026.09.12-4';
 
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
@@ -677,7 +680,8 @@ const THEMES = [
   { id:'hanji', name:'한지 종이', a:'#F4EDDF', b:'#C0392B' },
   { id:'bold',  name:'크고 선명', a:'#FFFFFF', b:'#D40000' }
 ];
-let THEME = 'light';
+/* BOOT_THEME은 머리말에서 정해 둔, 서버 답이 오기 전에만 쓰는 값입니다 */
+let THEME = (typeof BOOT_THEME === 'string') ? BOOT_THEME : 'bold';
 let THEME_CHOSEN = false;        // 이 교실에서 직접 골랐는가 (골랐으면 계속 우선한다)
 try{
   const saved = localStorage.getItem('theme');
@@ -687,7 +691,7 @@ try{
     const fromSchool = localStorage.getItem('theme:default');
     if (fromSchool && THEMES.some(function(t){ return t.id === fromSchool; })) THEME = fromSchool;
   }
-}catch(err){ THEME = 'light'; }
+}catch(err){ /* 저장 공간을 못 쓰면 BOOT_THEME 그대로 간다 */ }
 
 const qs = new URLSearchParams(location.search);
 let GRADE = qs.get('grade') || lsGet('grade');
