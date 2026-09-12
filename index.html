@@ -323,6 +323,31 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 .mealcard .kcal{ margin-left:.35rem; font-size:1.15rem; font-weight:900;
   color:var(--note); letter-spacing:-.02em; }
 
+/* 알레르기 유발 식품 번호 : 메뉴 이름 오른쪽 위에 작게 */
+.mealcard li .alg{
+  font-size:.62em; font-weight:900; color:var(--note);
+  vertical-align:super; letter-spacing:.02em;
+}
+.mealcard li.more{ color:var(--soft); font-weight:700; }
+.mealcard li.more::before{ background:var(--soft); }
+
+.mealcard .allergy{
+  font-size:.95rem; font-weight:800; color:var(--note); line-height:1.35;
+  letter-spacing:-.01em;
+}
+/* 원산지는 글이 길어 두 줄까지만 보이고 나머지는 접는다 */
+.mealcard .origin{
+  font-size:.82rem; font-weight:700; color:var(--soft); line-height:1.3;
+  letter-spacing:-.01em;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.mealcard .dinner{
+  margin-top:.1rem; padding-top:.28rem; border-top:var(--bw) solid var(--line);
+  font-size:.98rem; font-weight:800; color:var(--soft); line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.mealcard .dinner b{ color:var(--meal); font-weight:900; margin-right:.35rem; }
+
 /* ── 하단 고정 띠 : 일정 (항상 화면 맨 아래) ──── */
 .calbar{
   position:fixed; left:0; right:0; bottom:0; z-index:5;
@@ -445,9 +470,10 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 }
 </style>
 <script>
-/* 저장해 둔 테마를 화면이 그려지기 전에 입혀서 밝은 화면이 번쩍이지 않게 합니다 */
+/* 테마를 화면이 그려지기 전에 입혀서 밝은 화면이 번쩍이지 않게 합니다.
+   이 교실에서 직접 고른 테마가 있으면 그것을, 없으면 학교가 정한 기본값을 씁니다. */
 try{
-  var t = localStorage.getItem('theme');
+  var t = localStorage.getItem('theme') || localStorage.getItem('theme:default');
   if (t && t !== 'light') document.documentElement.dataset.theme = t;
 }catch(e){}
 </script>
@@ -543,6 +569,10 @@ const API = 'https://script.google.com/macros/s/AKfycbxfa2h5lJZQjCqRFfrQ3wcACVrJ
 const EDGE = 'https://today-classroom.sungguk815.workers.dev';
 let edgeOk = true;
 
+/* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
+   어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
+const APP_VERSION = '2026.09.12';
+
 const REFRESH_MS = 3 * 60 * 1000;
 const RETURN_MS  = 2 * 60 * 1000;
 const HIDE_EVENTS = ['토요휴업일','재량휴업일','일요일'];
@@ -567,6 +597,14 @@ const SUBJECT_COLORS = [
   [['진로','진탐','주제','행복','창체','자율','동아리','봉사'], '#7688A3']
 ];
 const FALLBACK_COLOR = '#7688A3';
+
+/* 식품의약품안전처가 정한 알레르기 유발 식품 18종 + 잣.
+   나이스가 메뉴 뒤에 번호로만 주므로 여기서 이름을 붙입니다. */
+const ALLERGY_NAMES = {
+  1:'난류', 2:'우유', 3:'메밀', 4:'땅콩', 5:'대두', 6:'밀', 7:'고등어',
+  8:'게', 9:'새우', 10:'돼지고기', 11:'복숭아', 12:'토마토', 13:'아황산류',
+  14:'호두', 15:'닭고기', 16:'쇠고기', 17:'오징어', 18:'조개류', 19:'잣'
+};
 
 function subjectColor(name){
   const s = String(name || '');
@@ -607,14 +645,20 @@ const THEMES = [
   { id:'bold',  name:'크고 선명', a:'#FFFFFF', b:'#D40000' }
 ];
 let THEME = 'light';
+let THEME_CHOSEN = false;        // 이 교실에서 직접 골랐는가 (골랐으면 계속 우선한다)
 try{
   const saved = localStorage.getItem('theme');
-  if (saved && THEMES.some(function(t){ return t.id === saved; })) THEME = saved;
+  if (saved && THEMES.some(function(t){ return t.id === saved; })){
+    THEME = saved; THEME_CHOSEN = true;
+  } else {
+    const fromSchool = localStorage.getItem('theme:default');
+    if (fromSchool && THEMES.some(function(t){ return t.id === fromSchool; })) THEME = fromSchool;
+  }
 }catch(err){ THEME = 'light'; }
 
 const qs = new URLSearchParams(location.search);
-let GRADE = qs.get('grade') || localStorage.getItem('grade');
-let CLASS = qs.get('class') || localStorage.getItem('class');
+let GRADE = qs.get('grade') || lsGet('grade');
+let CLASS = qs.get('class') || lsGet('class');
 let VIEW_DATE = qs.get('date') || null;
 let returnTimer = null;
 let DATA = null, PERIODS = [], lastOkAt = 0;
@@ -622,8 +666,47 @@ let calMonth = null;
 let calEvents = [];
 let setupReady = false;
 
+/* 학급 구성(몇 학년이 몇 반까지 있는지)은 서버가 알려 줍니다.
+   예전에는 이 파일에도 { 1:7, 2:7, 3:6 }을 따로 적어 두어, 학급 수가 바뀌면
+   Code.gs와 이 파일 두 곳을 고쳐야 했습니다. 이제 아래 자리표는 서버에
+   한 번도 닿지 못한 첫 실행 때만 잠깐 쓰이고, config가 오면 바로 교체됩니다. */
+let STRUCTURE = null;
+const STRUCTURE_FALLBACK = { 1:10, 2:10, 3:10 };
+
+function classStructure(){
+  const fromServer = DATA && DATA.config && DATA.config.classStructure;
+  if (fromServer && Object.keys(fromServer).length) STRUCTURE = fromServer;
+  return STRUCTURE || STRUCTURE_FALLBACK;
+}
+
+/** 학년·반을 아직 고르지 않아 자료를 받을 수 없을 때, 구성만 따로 받아 온다 */
+async function loadStructure(){
+  if (STRUCTURE) return STRUCTURE;
+  try{
+    const url = (EDGE && edgeOk) ? EDGE + '/api/gas?type=config' : API + '?type=config';
+    const res = await fetch(url, { cache:'no-store' });
+    const body = await res.json();
+    if (body && body.ok && body.data){
+      if (body.data.classStructure && Object.keys(body.data.classStructure).length){
+        STRUCTURE = body.data.classStructure;
+      }
+      rememberDefaultTheme(body.data.defaultTheme);
+    }
+  }catch(err){
+    console.warn('학급 구성을 받지 못했습니다 — 임시 목록으로 보여 줍니다', err);
+  }
+  return STRUCTURE;
+}
+
 let SLOT_ROWS = {};
 let tipPeriod = null, tipSticky = false, tipTimer = null;
+
+/* 시간표 칸을 매초 통째로 다시 만들면 전자칠판이 버거워합니다
+   (하루 8시간이면 약 29,000번). 그래서 '무엇이 달라졌는지'를 아래 표시로 견주어
+   현재 교시나 끝난 교시가 바뀔 때만 다시 그리고, 나머지 초에는
+   남은 시간과 진행바만 갈아끼웁니다. */
+let slotSig = '';
+let dataStamp = 0;
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const dayCache = {};      // 날짜별로 받아온 응답
@@ -659,8 +742,10 @@ function init(){
     if (snap) dayCache[dayKey(null)] = { data:snap, at:0 };
     load(!!snap, true);
 
-    setInterval(function(){ load(false, false); }, REFRESH_MS);
+    setInterval(function(){ load(false, false); sendBeat(); }, REFRESH_MS);
     tick(); setInterval(tick, 1000);
+    sendBeat();
+    registerServiceWorker();
   }catch(err){
     console.error(err);
     document.body.textContent = '화면을 불러오지 못했습니다. 새로고침 해주세요. ' + (err && err.message || err);
@@ -929,7 +1014,36 @@ async function prefetchDay(ymd){
 
 function setStale(on){ document.getElementById('stale').classList.toggle('show', on); }
 
+/* 이 교실 화면이 살아 있다는 신고 — 하루에 한 번만 보냅니다.
+   '접속기록' 시트를 보면 어느 반 칠판이 며칠째 켜지지 않았는지 알 수 있습니다.
+   앞단(Worker)을 거치지 않습니다. 보관해 둘 응답이 아니기 때문입니다. */
+function sendBeat(){
+  if (!GRADE || !CLASS) return;
+  const key = 'beat:' + GRADE + '/' + CLASS;
+  const today = todayYmd();
+  if (lsGet(key) === today) return;
+
+  fetch(API + '?type=beat&grade=' + encodeURIComponent(GRADE)
+      + '&class=' + encodeURIComponent(CLASS)
+      + '&v=' + encodeURIComponent(APP_VERSION), { cache:'no-store' })
+    .then(function(){ lsSet(key, today); })
+    .catch(function(){ /* 다음 갱신 때 다시 보낸다 */ });
+}
+
+/* 인터넷이 끊겨도 화면 자체(글꼴·틀)는 뜨도록 준비해 둡니다.
+   자료는 예전부터 localStorage에 남겨 두고 있었지만, 페이지와 글꼴은
+   받아 두지 않아 학교망이 흔들리면 빈 화면이 되곤 했습니다. */
+function registerServiceWorker(){
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
+  navigator.serviceWorker.register('sw.js').catch(function(err){
+    console.warn('오프라인 준비 실패', err);
+  });
+}
+
 function render(){
+  dataStamp++;                 // 자료가 바뀌었으니 시간표 칸을 반드시 다시 그린다
+  applyServerTheme();
   renderDate(); renderMeal(); renderWeek(); renderCalendar(); renderNotes(); tick();
 }
 
@@ -948,37 +1062,43 @@ function renderSlots(){
   const box = document.getElementById('slots');
   const t = DATA && DATA.timetable;
   if (t && !t.ok){
-    SLOT_ROWS = {}; if (tipPeriod != null) hideTip();
+    SLOT_ROWS = {}; slotSig = ''; if (tipPeriod != null) hideTip();
     box.innerHTML = '<div class="none">시간표를 불러오지 못했습니다<' + '/div>'; return;
   }
   if (!t || !t.value || !t.value.length){
-    SLOT_ROWS = {}; if (tipPeriod != null) hideTip();
+    SLOT_ROWS = {}; slotSig = ''; if (tipPeriod != null) hideTip();
     box.innerHTML = '<div class="none">' + emptyWord() + ' 시간표가 없습니다<' + '/div>'; return;
   }
 
   const now = new Date();
+  const nowMin = isPreview() ? -1 : minutesOf(now);
   const cur = currentSlot(now);
-  const curP = cur ? cur.period : -1;
-  let pct = 0, left = 0;
-  if (cur){
-    const total = cur.endMin - cur.startMin;
-    pct = Math.min(100, Math.max(0, (minutesOf(now) - cur.startMin) / total * 100));
-    left = Math.max(0, Math.ceil(cur.endMin - minutesOf(now)));
+  const curP = (cur && cur.period > 0) ? cur.period : -1;
+
+  // 달라진 것이 없으면 남은 시간과 진행바만 갈아끼우고 끝낸다
+  let doneCount = 0;
+  t.value.forEach(function(row){ if (slotDone(row.period, nowMin)) doneCount++; });
+  const sig = [dataStamp, curP, doneCount, t.value.length].join('|');
+
+  if (sig === slotSig && box.querySelector('.slots')){
+    updateLiveSlot(cur, nowMin);
+    return;
   }
+  slotSig = sig;
 
   SLOT_ROWS = {};
   box.innerHTML = '<div class="slots">' + t.value.map(function(row){
     const c = subjectColor(row.subject);
     const on = row.period === curP;
-    const done = curP > 0 && row.period < curP;
+    const done = !on && slotDone(row.period, nowMin);
     const cls = 'slot' + (on ? ' on' : done ? ' done' : '') + (row.changed ? ' mod' : '');
     SLOT_ROWS[row.period] = row;
     let inner = '<div class="p">' + row.period + '교시<' + '/div>'
               + '<div class="s">' + esc(row.subject) + '<' + '/div>';
     if (row.changed) inner += '<div class="chg">변경<' + '/div>';
     if (on){
-      inner += '<div class="left">' + (left > 0 ? left + '분 남음' : '곧 종료') + '<' + '/div>'
-             + '<div class="bar"><i style="width:' + pct + '%"><' + '/i><' + '/div>';
+      // 값은 updateLiveSlot이 매초 채운다
+      inner += '<div class="left"><' + '/div><div class="bar"><i><' + '/i><' + '/div>';
     }
     const teacher = String(row.teacher || '').trim();
     const prevTeacher = String(row.previousTeacher || '').trim();
@@ -990,8 +1110,33 @@ function renderSlots(){
     return '<div class="' + cls + '" style="--c:' + c + '" data-period="' + row.period + '">'
          + inner + '<' + '/div>';
   }).join('') + '<' + '/div>';
+
+  updateLiveSlot(cur, nowMin);
   bindSlotTip();
   syncTip();
+}
+
+/**
+ * 매초 하는 일은 이것뿐입니다 — 글자 한 곳과 진행바 너비 한 곳.
+ * 칸을 다시 만들지 않으므로 떠 있는 설명창도 더 이상 흔들리지 않습니다.
+ */
+function updateLiveSlot(cur, nowMin){
+  const on = document.querySelector('#slots .slot.on');
+  if (!on || !cur || cur.period <= 0 || nowMin < 0) return;
+
+  const total = cur.endMin - cur.startMin;
+  const pct = total > 0
+    ? Math.min(100, Math.max(0, (nowMin - cur.startMin) / total * 100))
+    : 0;
+  const left = Math.max(0, Math.ceil(cur.endMin - nowMin));
+
+  const leftEl = on.querySelector('.left');
+  if (leftEl){
+    const text = left > 0 ? left + '분 남음' : '곧 종료';
+    if (leftEl.textContent !== text) leftEl.textContent = text;
+  }
+  const barEl = on.querySelector('.bar > i');
+  if (barEl) barEl.style.width = pct.toFixed(1) + '%';
 }
 
 /* ── 상세 레이어창 : 교사·변경 내역 ───────────────────────── */
@@ -1092,9 +1237,24 @@ function applyTheme(id, save){
   else root.dataset.theme = THEME;
 
   if (save !== false){
+    THEME_CHOSEN = true;         // 교실에서 고른 테마는 학교 기본값보다 우선한다
     try{ localStorage.setItem('theme', THEME); }catch(err){}
   }
   markTheme();
+}
+
+/**
+ * 학교가 정한 기본 테마(Code.gs의 CONFIG.DEFAULT_THEME)를 받아 둔다.
+ * 교실에서 T 키로 직접 고른 적이 있으면 그 교실에서는 바꾸지 않는다.
+ */
+function rememberDefaultTheme(id){
+  if (!id || !THEMES.some(function(t){ return t.id === id; })) return;
+  try{ localStorage.setItem('theme:default', id); }catch(err){}
+  if (!THEME_CHOSEN && id !== THEME) applyTheme(id, false);
+}
+
+function applyServerTheme(){
+  rememberDefaultTheme(DATA && DATA.config && DATA.config.defaultTheme);
 }
 
 /** 목록에서 지금 쓰는 테마에 표시를 남긴다 */
@@ -1251,22 +1411,68 @@ function renderMeal(){
     box.innerHTML = '<div class="none">' + emptyWord() + ' 급식 정보가 없습니다<' + '/div>';
     return;
   }
-  const lunch = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
+  const lunch  = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
+  const dinner = m.value.find(function(x){ return /석식/.test(x.type); });
   const kcal = String(lunch.kcal || '').trim();
   title.innerHTML = ICON.meal + '<span>' + mealLabel + '<' + '/span>'
     + (kcal ? '<span class="kcal">' + esc(kcal) + '<' + '/span>' : '');
-  const dishes = (lunch.dishes || []).slice(0, MAX_MEAL);
-  const items = dishes.map(function(x){
-    return '<li>' + esc(String(x.name || '').replace(/\*+$/, '')) + '<' + '/li>';
+
+  // 메뉴가 MAX_MEAL보다 많으면 예전에는 조용히 사라졌습니다. 이제 몇 개가
+  // 더 있는지 알려 줍니다.
+  const all = lunch.dishes || [];
+  const dishes = all.slice(0, MAX_MEAL);
+  const hidden = all.length - dishes.length;
+
+  let items = dishes.map(function(x){
+    const codes = (x.allergy || []).filter(function(c){ return ALLERGY_NAMES[Number(c)]; });
+    return '<li>' + esc(dishName(x))
+         + (codes.length ? '<span class="alg">' + esc(codes.join('.')) + '<' + '/span>' : '')
+         + '<' + '/li>';
   }).join('');
+  if (hidden > 0) items += '<li class="more">외 ' + hidden + '개<' + '/li>';
+
+  const allergyNote   = allergyLegend(dishes);
   const nutritionNote = formatNutritionNote(lunch.nutrition);
+  const originNote    = String(lunch.origin || '').trim();
+  const dinnerNote    = dinner ? dishNames(dinner.dishes) : '';
+
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
   const photo = photoUrl
     ? '<div class="shotbox"><img src="' + esc(photoUrl) + '" alt="급식 사진" onerror="mealPhotoFallback(this)"><' + '/div>'
     : '<div class="shotbox"><div class="empty">이미지가 없습니다<' + '/div><' + '/div>';
+
   box.innerHTML = '<div class="row"><div class="menu"><ul>' + items + '<' + '/ul>'
-                + (nutritionNote ? '<div class="nutrition">' + esc(nutritionNote) + '<' + '/div>' : '')
-                + '<' + '/div>' + photo + '<' + '/div>';
+    + (allergyNote   ? '<div class="allergy">'   + esc(allergyNote)   + '<' + '/div>' : '')
+    + (nutritionNote ? '<div class="nutrition">' + esc(nutritionNote) + '<' + '/div>' : '')
+    + (originNote    ? '<div class="origin">원산지 ' + esc(originNote) + '<' + '/div>' : '')
+    + (dinnerNote    ? '<div class="dinner"><b>석식<' + '/b>' + esc(dinnerNote) + '<' + '/div>' : '')
+    + '<' + '/div>' + photo + '<' + '/div>';
+}
+
+/** 나이스는 메뉴 이름 끝에 별표를 붙여 오는 일이 있습니다 */
+function dishName(x){
+  return String((x && x.name) || '').replace(/[*]+$/, '').trim();
+}
+
+function dishNames(dishes){
+  return (dishes || []).map(dishName).filter(Boolean).join(', ');
+}
+
+/**
+ * 오늘 나온 메뉴에 실제로 들어 있는 번호만 풀어 적습니다.
+ * 18종을 모두 늘어놓으면 교실 화면에서 읽히지 않기 때문입니다.
+ */
+function allergyLegend(dishes){
+  const seen = {};
+  (dishes || []).forEach(function(d){
+    ((d && d.allergy) || []).forEach(function(c){
+      const k = Number(c);
+      if (ALLERGY_NAMES[k]) seen[k] = true;
+    });
+  });
+  const keys = Object.keys(seen).map(Number).sort(function(a, b){ return a - b; });
+  if (!keys.length) return '';
+  return '알레르기 ' + keys.map(function(k){ return k + ' ' + ALLERGY_NAMES[k]; }).join(' · ');
 }
 function formatNutritionNote(list){
   if (!list || !list.length) return '';
@@ -1485,6 +1691,28 @@ function currentSlot(now){
   return null;
 }
 
+/** 그 교시가 끝나는 시각(분). 시정표에 없는 교시면 null */
+function periodEndMin(period){
+  for (let i = 0; i < PERIODS.length; i++){
+    if (Number(PERIODS[i].period) === Number(period)) return toMin(PERIODS[i].end);
+  }
+  return null;
+}
+
+/**
+ * 이 교시가 끝났는가.
+ *
+ * 예전에는 '현재 교시 번호보다 작으면 끝난 것'으로 보았습니다. 그런데
+ * 쉬는시간에는 현재 교시가 없고 점심·조례는 교시 번호가 0이어서, 정작 학생들이
+ * 화면을 가장 많이 보는 쉬는시간마다 지나간 교시의 회색 표시가 사라졌습니다.
+ * 그래서 교시 번호 대신 '지금이 그 교시의 끝을 지났는지'로 판단합니다.
+ */
+function slotDone(period, nowMin){
+  if (nowMin < 0) return false;                 // 다른 날짜를 들춰보는 중
+  const end = periodEndMin(period);
+  return end != null && nowMin >= end;
+}
+
 function showSetup(editing){
   const box = document.getElementById('setup');
   const g = document.getElementById('selGrade');
@@ -1492,14 +1720,23 @@ function showSetup(editing){
   const save = document.getElementById('btnSave');
   const cancel = document.getElementById('btnCancelSetup');
   const hint = document.getElementById('setupHint');
-  const structure = { 1:7, 2:7, 3:6 };
 
   closeCalModal(); hideTip();
 
+  function fillGrades(){
+    const prev = g.value || (GRADE ? String(GRADE) : '');
+    g.innerHTML = '';
+    Object.keys(classStructure())
+      .map(Number)
+      .sort(function(a, b){ return a - b; })
+      .forEach(function(nm){ g.add(new Option(nm + '학년', String(nm))); });
+    if (prev && g.querySelector('option[value="' + prev + '"]')) g.value = prev;
+  }
+
   function fillClasses(){
-    const prev = c.value || CLASS || '';
+    const prev = c.value || (CLASS ? String(CLASS) : '');
     c.innerHTML = '';
-    const max = structure[Number(g.value)] || 10;
+    const max = classStructure()[Number(g.value)] || 10;
     for (let i = 1; i <= max; i++) c.add(new Option(i + '반', String(i)));
     if (prev && Number(prev) <= max) c.value = String(prev);
   }
@@ -1509,15 +1746,13 @@ function showSetup(editing){
   document.body.classList.remove('idle');
 
   if (!setupReady){
-    g.innerHTML = '';
-    [1,2,3].forEach(function(n){ g.add(new Option(n + '학년', String(n))); });
     g.addEventListener('change', fillClasses);
     save.addEventListener('click', function(){
       const nextGrade = g.value;
       const nextClass = c.value;
       if (!nextGrade || !nextClass) return;
-      localStorage.setItem('grade', nextGrade);
-      localStorage.setItem('class', nextClass);
+      lsSet('grade', nextGrade);
+      lsSet('class', nextClass);
       location.replace(
         location.pathname
         + '?grade=' + encodeURIComponent(nextGrade)
@@ -1531,10 +1766,21 @@ function showSetup(editing){
     setupReady = true;
   }
 
+  fillGrades();
   if (GRADE) g.value = String(GRADE);
-  else if (!g.value) g.value = '1';
+  else if (!g.value) g.value = String(Object.keys(classStructure())[0] || 1);
   fillClasses();
   if (CLASS) c.value = String(CLASS);
+
+  // 서버에서 학급 구성을 아직 못 받았으면 받아 와서 목록을 다시 채운다
+  if (!STRUCTURE){
+    loadStructure().then(function(){
+      fillGrades();
+      if (GRADE) g.value = String(GRADE);
+      fillClasses();
+      if (CLASS) c.value = String(CLASS);
+    });
+  }
 
   if (editing && GRADE && CLASS){
     hint.textContent = '학년·반을 바꾼 뒤 저장하세요';
@@ -1568,6 +1814,16 @@ function shiftYmd(ymd, step){
 }
 function minutesOf(d){ return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60; }
 function pad(n){ return String(n).padStart(2,'0'); }
+
+/* 저장 공간을 쓸 수 없는 환경(사생활 보호 모드, 저장 차단 설정, 미리보기 틀
+   안에서 열린 경우)에서는 localStorage에 손대기만 해도 오류가 납니다.
+   예전에는 그 오류 하나에 화면 전체가 뜨지 않았습니다. */
+function lsGet(key){
+  try{ return localStorage.getItem(key); }catch(err){ return null; }
+}
+function lsSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }catch(err){ return false; }
+}
 function esc(s){
   return String(s == null ? '' : s)
     .replace(/&/g,'&amp;')
