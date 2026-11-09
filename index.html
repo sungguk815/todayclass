@@ -222,14 +222,14 @@ svg{ display:block; }
   position:relative;
   /* --subject : 어두운 테마에서는 과목 색을 밝게 올려 읽히게 한다 */
   --subject:var(--c);
-  flex:1 1 0; min-width:0; height:9.25rem; border-radius:.6rem; padding:.5rem .45rem .6rem;
+  flex:1 1 0; min-width:0; height:6.75rem; border-radius:.6rem; padding:.3rem .45rem .4rem;
   background:var(--slot); border-top:.32rem solid var(--c);
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.12rem;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.08rem;
   transition:flex-grow .3s ease;
 }
 html[data-theme="chalk"] .slot,
 html[data-theme="night"] .slot{ --subject:color-mix(in srgb, var(--c) 45%, #FFFFFF); }
-.slot .p{ font-size:1.05rem; font-weight:900; color:var(--soft); }
+.slot .p{ font-size:1.05rem; line-height:1.1; font-weight:900; color:var(--soft); }
 .slot .s{ font-size:2.1rem; line-height:1.1; font-weight:900; letter-spacing:-.03em; color:var(--subject);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .slot.done{ background:var(--slot-done); border-top-color:var(--done-line); }
@@ -239,9 +239,9 @@ html[data-theme="night"] .slot{ --subject:color-mix(in srgb, var(--c) 45%, #FFFF
   flex:1.9 1 0; background:var(--c); border-top-color:var(--c);
   box-shadow:0 .3rem .9rem color-mix(in srgb, var(--c) 40%, transparent);
 }
-.slot.on .p{ color:rgba(255,255,255,.82); font-size:1.15rem; }
-.slot.on .s{ color:#fff; font-size:3.3rem; }
-.slot.on .left{ font-size:1.2rem; font-weight:800; color:rgba(255,255,255,.9); }
+.slot.on .p{ color:rgba(255,255,255,.82); font-size:1rem; }
+.slot.on .s{ color:#fff; font-size:2.6rem; }
+.slot.on .left{ font-size:1rem; line-height:1.1; font-weight:800; color:rgba(255,255,255,.9); }
 /* 쉬는시간·점심 : 다음 교시 칸이 깨어나 남은 시간을 알려 준다.
    수업 중 강조(.on)는 칸을 색으로 가득 채우지만, 여기서는 테두리로만 둘러
    '아직 시작 전'이라는 것이 한눈에 구분되게 한다. */
@@ -251,9 +251,9 @@ html[data-theme="night"] .slot{ --subject:color-mix(in srgb, var(--c) 45%, #FFFF
   outline:.16rem solid color-mix(in srgb, var(--c) 50%, transparent);
   outline-offset:-.16rem;
 }
-.slot.next .p{ color:var(--subject); font-size:1.1rem; }
-.slot.next .s{ font-size:2.8rem; }
-.slot.next .left{ font-size:1.1rem; font-weight:900; color:var(--subject); }
+.slot.next .p{ color:var(--subject); font-size:1rem; }
+.slot.next .s{ font-size:2.4rem; }
+.slot.next .left{ font-size:.95rem; line-height:1.1; font-weight:900; color:var(--subject); }
 .slot.next .bar{ background:color-mix(in srgb, var(--c) 20%, transparent); }
 .slot.next .bar > i{ background:var(--c); }
 /* 1분 남으면 천천히 숨 쉬듯 — 자리로 돌아올 시간이라는 신호 */
@@ -272,8 +272,8 @@ html[data-theme="night"] .slot{ --subject:color-mix(in srgb, var(--c) 45%, #FFFF
   outline-offset:-.14rem;
 }
 .slot.mod.done{ outline-color:color-mix(in srgb, var(--note) 20%, transparent); }
-.slot .bar{ width:82%; height:.22rem; border-radius:.11rem;
-  background:rgba(255,255,255,.32); overflow:hidden; margin-top:.18rem; }
+.slot .bar{ width:82%; height:.18rem; flex-shrink:0; border-radius:.11rem;
+  background:rgba(255,255,255,.32); overflow:hidden; margin-top:.12rem; }
 .slot .bar > i{ display:block; height:100%; background:#fff; width:0; transition:width .9s linear; }
 
 /* 교사명 : 칸 아래 빈 공간에 떠 있는 작은 레이어 — 기존 내용을 가리지 않습니다 */
@@ -703,7 +703,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.10-2';
+const APP_VERSION = '2026.11.10-3';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
