@@ -613,6 +613,7 @@ try{
 
   <section class="line">
     <div class="ct fn" id="lineTitle"></div>
+    <div id="screenSync" role="status" style="font-size:.8rem;margin:.2rem 0 .35rem;opacity:.85"></div>
     <div id="slots"><div class="none">불러오는 중</div></div>
   </section>
 
@@ -695,13 +696,14 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.01-1';
+const APP_VERSION = '2026.11.10-1';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
 const REFRESH_MS = 3 * 60 * 1000;
 const REFRESH_SCHOOL_MS = 90 * 1000;
-const REFRESH_CHECK_MS = 30 * 1000;      // 이 간격으로 '받을 때가 됐는지'만 본다
+const REFRESH_CHECK_MS = 5 * 1000;
+let screenRefreshing = false;
 const RETURN_MS  = 2 * 60 * 1000;
 const HIDE_EVENTS = ['토요휴업일','재량휴업일','일요일'];
 const MAX_MEAL = 8;
@@ -1057,6 +1059,18 @@ async function fetchDay(ymd, fresh){
   const body = await res.json();
   if (!body.ok) throw new Error(body.error || '응답 오류');
 
+  const previous = dayCache[dayKey(ymd)];
+  if (previous && previous.data.date === body.data.date && previous.data.screenSync &&
+      previous.data.screenSync.capturedAt && previous.data.timetable && previous.data.timetable.ok &&
+      (!body.data.screenSync || !body.data.screenSync.ok)) {
+    // 컴시간 수집/중계 장애 때 나이스로 조용히 바꾸지 않고 마지막 컴시간 표를 유지한다.
+    body.data.timetable = previous.data.timetable;
+    body.data.week = previous.data.week;
+    body.data.screenSync = Object.assign({}, previous.data.screenSync, {
+      ok: false, stale: true, fallback: false, error: (body.data.screenSync && body.data.screenSync.error) || '컴시간 연결 확인 필요'
+    });
+  }
+
   dayCache[dayKey(ymd)] = { data:body.data, at:Date.now() };
   lastOkAt = Date.now();
   saveSnapshot(ymd, body.data);
@@ -1201,14 +1215,41 @@ function refreshMs(){
   const day = d.getDay();
   if (day === 0 || day === 6) return REFRESH_MS;
   const hm = d.getHours() * 100 + d.getMinutes();
-  return (hm >= 730 && hm <= 1520) ? REFRESH_SCHOOL_MS : REFRESH_MS;
+  return (hm >= 730 && hm <= 1630) ? (DATA && DATA.screenSync ? 15 * 1000 : REFRESH_SCHOOL_MS) : REFRESH_MS;
 }
 
 function tickRefresh(){
+  updateScreenSync();
+  if (screenRefreshing) return;
   if (Date.now() - lastRefreshAt < refreshMs()) return;
   lastRefreshAt = Date.now();
-  load(false, false);
+  screenRefreshing = true;
+  load(false, false).finally(function(){ screenRefreshing = false; });
   sendBeat();
+}
+
+function updateScreenSync(){
+  const el = document.getElementById('screenSync');
+  if (!el || !DATA) return;
+  const sync = DATA.screenSync;
+  el.style.color = '';
+  el.title = '';
+  if (!sync) {
+    const rows = DATA.timetable && DATA.timetable.value;
+    el.textContent = rows && rows.some(function(p){ return p.source === 'neis'; }) ? '기본 시간표(나이스) · 실시간 변경 확인 불가 · 변경 수업은 담당 교사에게 확인하세요' : '';
+    return;
+  }
+  if (sync.fallback) {
+    el.textContent = (sync.fallbackSource === 'neis' ? '기본 시간표(나이스)' : '보관 시간표') + ' · 실시간 변경 확인 불가 · 변경 수업은 담당 교사에게 확인하세요';
+    el.style.color = '#c43b26';
+    el.title = sync.error || '';
+    return;
+  }
+  const stale = !sync.ok || !sync.capturedAt || Date.now() - sync.capturedAt > 120000;
+  const time = sync.capturedAt ? new Date(sync.capturedAt).toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }) : '';
+  el.textContent = stale ? '마지막 컴시간 시간표 · 실시간 변경 확인 불가' + (time ? ' · 마지막 확인 ' + time : '') : '컴시간 화면 확인 ' + time;
+  el.style.color = stale ? '#c43b26' : '';
+  el.title = sync.error || ('컴시간 수정일: ' + sync.updatedAt);
 }
 
 /**
@@ -1262,6 +1303,7 @@ function render(){
   dataStamp++;                 // 자료가 바뀌었으니 시간표 칸을 반드시 다시 그린다
   applyServerTheme();
   renderDate(); renderMeal(); renderWeek(); renderCalendar(); tick();
+  updateScreenSync();
 }
 
 function renderDate(){
@@ -2211,3 +2253,4 @@ function esc(s){
 </script>
 </body>
 </html>
+
