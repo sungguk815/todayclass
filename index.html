@@ -186,7 +186,7 @@ svg{ display:block; }
 .navbtn:hover,.navbtn:focus-visible{ color:var(--ink); border-color:var(--soft); outline:none; }
 .navbtn.today{ width:auto; padding:0 .8rem; font:inherit; font-size:1.05rem; font-weight:900; }
 .navbtn.today[data-off]{ visibility:hidden; }   /* 자리는 지키고 모습만 감춤 */
-.navbtn.view{ width:7rem; display:flex; gap:.3rem; font-size:.85rem; font-weight:800; white-space:nowrap; }
+.navbtn.view{ width:2.1rem; flex:0 0 2.1rem; }
 .comci-link{ flex:0 0 auto; margin-left:auto; padding:.16rem .5rem; border:var(--bw) solid var(--line);
   border-radius:.35rem; background:var(--chip); color:var(--chip-ink); font:inherit;
   font-size:.78rem; font-weight:800; text-decoration:none; white-space:nowrap; cursor:pointer; }
@@ -619,7 +619,7 @@ try{
       <button class="navbtn" id="prevDay" aria-label="이전 날짜"></button>
       <div class="date" id="date">—</div>
       <button class="navbtn" id="nextDay" aria-label="다음 날짜"></button>
-      <button type="button" class="navbtn view" id="fullscreenBtn" aria-pressed="false" title="전체화면 보기">전체화면</button>
+      <button type="button" class="navbtn view" id="fullscreenBtn" aria-pressed="false" aria-label="전체화면 보기" title="전체화면 보기"></button>
     </div>
   </header>
 
@@ -712,7 +712,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.10-4';
+const APP_VERSION = '2026.11.10-5';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
@@ -926,9 +926,10 @@ function bindViewControls(){
   const active = function(){ return Boolean(document.fullscreenElement || document.webkitFullscreenElement); };
   const sync = function(){
     const on = active();
-    button.textContent = on ? '브라우저 화면' : '전체화면';
+    const path = on ? 'M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5' : 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5';
+    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + path + '"></path></svg>';
     button.setAttribute('aria-pressed', String(on));
-    button.title = on ? '전체화면 종료 (Esc)' : '전체화면 보기';
+    button.title = on ? '브라우저 화면으로 돌아가기 (Esc)' : '전체화면 보기';
     button.setAttribute('aria-label', button.title);
   };
   button.addEventListener('click', async function(){
