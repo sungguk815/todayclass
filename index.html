@@ -186,6 +186,12 @@ svg{ display:block; }
 .navbtn:hover,.navbtn:focus-visible{ color:var(--ink); border-color:var(--soft); outline:none; }
 .navbtn.today{ width:auto; padding:0 .8rem; font:inherit; font-size:1.05rem; font-weight:900; }
 .navbtn.today[data-off]{ visibility:hidden; }   /* 자리는 지키고 모습만 감춤 */
+.navbtn.view{ width:7rem; display:flex; gap:.3rem; font-size:.85rem; font-weight:800; white-space:nowrap; }
+.comci-link{ flex:0 0 auto; margin-left:auto; padding:.16rem .5rem; border:var(--bw) solid var(--line);
+  border-radius:.35rem; background:var(--chip); color:var(--chip-ink); font:inherit;
+  font-size:.78rem; font-weight:800; text-decoration:none; white-space:nowrap; cursor:pointer; }
+.comci-link:hover,.comci-link:focus-visible{ border-color:var(--accent); color:var(--accent); }
+#comciFallback{ font-size:.75rem; white-space:nowrap; color:var(--accent); }
 
 /* ── 카드 공통 ─────────────────────────────────────────── */
 .card{ background:var(--card); border:var(--bw) solid var(--line);
@@ -613,6 +619,7 @@ try{
       <button class="navbtn" id="prevDay" aria-label="이전 날짜"></button>
       <div class="date" id="date">—</div>
       <button class="navbtn" id="nextDay" aria-label="다음 날짜"></button>
+      <button type="button" class="navbtn view" id="fullscreenBtn" aria-pressed="false" title="전체화면 보기">전체화면</button>
     </div>
   </header>
 
@@ -620,6 +627,8 @@ try{
     <div class="line-heading">
       <div class="ct fn" id="lineTitle"></div>
       <span id="screenSync" role="status"></span>
+      <a class="comci-link" id="comciOpen" href="http://xn--s39aj90b0nb2xw6xh.kr/" target="_blank" rel="noopener noreferrer" title="컴시간학생.kr 시간표를 작은 창으로 열기">컴시간학생.kr ↗</a>
+      <a id="comciFallback" href="http://xn--s39aj90b0nb2xw6xh.kr/" target="_blank" rel="noopener noreferrer" hidden>새 탭으로 열기</a>
     </div>
     <div id="slots"><div class="none">불러오는 중</div></div>
   </section>
@@ -644,7 +653,7 @@ try{
 </div>
 
 <div id="tip" aria-hidden="true"><div class="box" id="tipBox"></div></div>
-<div id="zoomToast" aria-hidden="true">100%</div>
+<div id="zoomToast" role="status" aria-live="polite" aria-hidden="true">100%</div>
 
 <div id="themeWrap">
   <div id="themePanel" role="menu" aria-hidden="true">
@@ -703,7 +712,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.10-3';
+const APP_VERSION = '2026.11.10-4';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
@@ -884,6 +893,7 @@ function init(){
     updateNowLabel();
     bindDateNav(); bindIdleCursor(); bindCalendarModal(); bindZoom(); bindTheme();
     bindPhotoZoom();
+    bindViewControls();
 
     // 기기에 남겨 둔 지난번 화면이 있으면 먼저 그려 두고, 최신 값은 뒤에서 받는다
     const snap = loadSnapshot();
@@ -898,6 +908,62 @@ function init(){
     console.error(err);
     document.body.textContent = '화면을 불러오지 못했습니다. 새로고침 해주세요. ' + (err && err.message || err);
   }
+}
+
+function showViewNotice(message){
+  const toast = document.getElementById('zoomToast');
+  clearTimeout(zoomToastTimer);
+  toast.textContent = message;
+  toast.classList.add('show');
+  toast.setAttribute('aria-hidden', 'false');
+  zoomToastTimer = setTimeout(function(){ toast.classList.remove('show'); toast.setAttribute('aria-hidden', 'true'); }, 6000);
+}
+
+function bindViewControls(){
+  const button = document.getElementById('fullscreenBtn');
+  if (button.dataset.bound) return;
+  button.dataset.bound = '1';
+  const active = function(){ return Boolean(document.fullscreenElement || document.webkitFullscreenElement); };
+  const sync = function(){
+    const on = active();
+    button.textContent = on ? '브라우저 화면' : '전체화면';
+    button.setAttribute('aria-pressed', String(on));
+    button.title = on ? '전체화면 종료 (Esc)' : '전체화면 보기';
+    button.setAttribute('aria-label', button.title);
+  };
+  button.addEventListener('click', async function(){
+    try{
+      if (active()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (!exit) throw new Error('unsupported');
+        await exit.call(document);
+      } else {
+        const enter = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+        if (!enter) throw new Error('unsupported');
+        await enter.call(document.documentElement);
+      }
+      sync();
+    }catch(error){ showViewNotice('이 환경에서는 전체화면 전환을 지원하지 않습니다. PC 브라우저에서는 F11을 이용하세요.'); }
+  });
+  document.addEventListener('fullscreenchange', sync);
+  document.addEventListener('webkitfullscreenchange', sync);
+  sync();
+  document.getElementById('comciOpen').addEventListener('click', function(event){
+    event.preventDefault();
+    const width = Math.min(440, screen.availWidth);
+    const height = Math.min(600, Math.max(300, screen.availHeight - 100));
+    const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+    const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+    let popup = null;
+    try { popup = window.open(this.href, 'comciStudentTimetable', 'popup=yes,width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'); } catch(error) {}
+    if (popup) {
+      try { popup.opener = null; popup.focus(); } catch(error) {}
+      document.getElementById('comciFallback').hidden = true;
+    } else {
+      document.getElementById('comciFallback').hidden = false;
+      showViewNotice('작은 창이 차단되었습니다. 옆의 새 탭으로 열기를 눌러주세요.');
+    }
+  });
 }
 
 function bindRoomEdit(){
