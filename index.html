@@ -213,12 +213,16 @@ svg{ display:block; }
   padding:.8rem .9rem .9rem;
 }
 .line .ct{ margin-bottom:.6rem; }
+.line-heading{ display:flex; align-items:baseline; gap:1ch; min-width:0; margin-bottom:.6rem; }
+.line-heading .ct{ flex:0 0 auto; margin-bottom:0; white-space:nowrap; }
+#screenSync{ min-width:0; font-size:.75rem; font-weight:600; color:var(--soft);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .slots{ display:flex; gap:.42rem; align-items:stretch; }
 .slot{
   position:relative;
   /* --subject : 어두운 테마에서는 과목 색을 밝게 올려 읽히게 한다 */
   --subject:var(--c);
-  flex:1 1 0; min-width:0; border-radius:.6rem; padding:.5rem .45rem .6rem;
+  flex:1 1 0; min-width:0; height:9.25rem; border-radius:.6rem; padding:.5rem .45rem .6rem;
   background:var(--slot); border-top:.32rem solid var(--c);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.12rem;
   transition:flex-grow .3s ease;
@@ -226,7 +230,7 @@ svg{ display:block; }
 html[data-theme="chalk"] .slot,
 html[data-theme="night"] .slot{ --subject:color-mix(in srgb, var(--c) 45%, #FFFFFF); }
 .slot .p{ font-size:1.05rem; font-weight:900; color:var(--soft); }
-.slot .s{ font-size:2.1rem; font-weight:900; letter-spacing:-.03em; color:var(--subject);
+.slot .s{ font-size:2.1rem; line-height:1.1; font-weight:900; letter-spacing:-.03em; color:var(--subject);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .slot.done{ background:var(--slot-done); border-top-color:var(--done-line); }
 .slot.done .s{ color:var(--done-ink); } .slot.done .p{ color:var(--done-soft); }
@@ -258,8 +262,9 @@ html[data-theme="night"] .slot{ --subject:color-mix(in srgb, var(--c) 45%, #FFFF
   50%{ box-shadow:0 .25rem 1.5rem color-mix(in srgb, var(--c) 60%, transparent); }
 }
 
-.slot .chg{ font-size:1.05rem; font-weight:900; color:#fff; background:var(--note);
-  padding:.1rem .5rem; border-radius:.3rem; letter-spacing:-.01em; }
+.slot .chg{ position:absolute; top:.35rem; right:.35rem;
+  font-size:.75rem; line-height:1.2; font-weight:900; color:#fff; background:var(--note);
+  padding:.1rem .35rem; border-radius:.3rem; letter-spacing:-.01em; }
 /* 바뀐 교시는 테두리까지 빨갛게 — 쉬는시간에 화면이 돌아왔을 때 바로 보이도록 */
 .slot.mod{
   border-top-color:var(--note);
@@ -612,8 +617,10 @@ try{
   </header>
 
   <section class="line">
-    <div class="ct fn" id="lineTitle"></div>
-    <div id="screenSync" role="status" style="font-size:.8rem;margin:.2rem 0 .35rem;opacity:.85"></div>
+    <div class="line-heading">
+      <div class="ct fn" id="lineTitle"></div>
+      <span id="screenSync" role="status"></span>
+    </div>
     <div id="slots"><div class="none">불러오는 중</div></div>
   </section>
 
@@ -696,7 +703,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.10-1';
+const APP_VERSION = '2026.11.10-2';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
@@ -1232,24 +1239,26 @@ function updateScreenSync(){
   const el = document.getElementById('screenSync');
   if (!el || !DATA) return;
   const sync = DATA.screenSync;
+  const failedMessage = "실시간 수업 변경 조회가 안됩니다. 변경 수업은 '컴시간학생.kr'에서 확인하세요.";
   el.style.color = '';
   el.title = '';
   if (!sync) {
     const rows = DATA.timetable && DATA.timetable.value;
-    el.textContent = rows && rows.some(function(p){ return p.source === 'neis'; }) ? '기본 시간표(나이스) · 실시간 변경 확인 불가 · 변경 수업은 담당 교사에게 확인하세요' : '';
+    el.textContent = rows && rows.some(function(p){ return p.source === 'neis'; }) ? failedMessage : '';
+    el.title = el.textContent;
     return;
   }
   if (sync.fallback) {
-    el.textContent = (sync.fallbackSource === 'neis' ? '기본 시간표(나이스)' : '보관 시간표') + ' · 실시간 변경 확인 불가 · 변경 수업은 담당 교사에게 확인하세요';
+    el.textContent = failedMessage;
     el.style.color = '#c43b26';
-    el.title = sync.error || '';
+    el.title = failedMessage;
     return;
   }
   const stale = !sync.ok || !sync.capturedAt || Date.now() - sync.capturedAt > 120000;
   const time = sync.capturedAt ? new Date(sync.capturedAt).toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }) : '';
-  el.textContent = stale ? '마지막 컴시간 시간표 · 실시간 변경 확인 불가' + (time ? ' · 마지막 확인 ' + time : '') : '컴시간 화면 확인 ' + time;
+  el.textContent = stale ? failedMessage : '컴시간 화면 확인 ' + time;
   el.style.color = stale ? '#c43b26' : '';
-  el.title = sync.error || ('컴시간 수정일: ' + sync.updatedAt);
+  el.title = stale ? failedMessage + (time ? ' 마지막 확인: ' + time : '') : ('컴시간 수정일: ' + sync.updatedAt);
 }
 
 /**
