@@ -844,15 +844,38 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 }
 
 .card{ box-shadow:var(--card-shadow, none); }
+
+/* 첫 화면은 공책 위에 연필로 준비 과정을 그립니다. */
+#dayLoader{ position:fixed; inset:0; z-index:24; display:grid; place-items:center; background:var(--bg); background-image:var(--backdrop, none); }
+.loader-paper{ width:min(31rem,90vw); padding:2rem 2.3rem; border:var(--bw) solid var(--line); border-radius:var(--r-card); background:var(--card); box-shadow:.3rem .4rem 0 var(--line); text-align:center; }
+.loader-kicker{ color:var(--accent); font-size:.85rem; font-weight:800; letter-spacing:.12em; }
+.loader-paper h2{ margin:.7rem 0 .5rem; font-size:1.7rem; color:var(--ink); }
+.loader-caption{ min-height:2.8em; margin:.5rem 0; font-size:1rem; line-height:1.5; color:var(--soft); }
+.loader-track{ position:relative; height:.7rem; margin:2.4rem .6rem 1.3rem; border-bottom:.12rem solid var(--line); }
+.loader-fill{ position:absolute; left:0; bottom:0; width:var(--progress,12%); height:.38rem; background:var(--accent); border-radius:1rem; transition:width .45s ease; }
+.loader-pencil{ position:absolute; left:var(--progress,12%); bottom:.2rem; width:2.5rem; height:2.5rem; color:var(--accent); transform-origin:10% 90%; transition:left .45s ease; animation:pencilWrite .65s ease-in-out infinite alternate; }
+.loader-pencil svg{ width:100%; height:100%; }
+.loader-steps{ display:flex; justify-content:space-between; gap:.5rem; font-size:.85rem; color:var(--soft); }
+.loader-steps span.active{ color:var(--accent); font-weight:900; }
+.loader-retry{ margin-top:1rem; padding:.6rem 1.2rem; border:0; border-radius:.4rem; font:inherit; background:var(--btn); color:var(--btn-ink); cursor:pointer; }
+.loader-retry:focus-visible{ outline:.15rem solid var(--accent); outline-offset:.2rem; }
+#dayLoader.complete .loader-pencil{ animation:none; }
+#dayLoader.complete .loader-paper{ animation:loaderReady .35s ease; }
+#refreshNotice{ position:fixed; right:1.1rem; bottom:1rem; z-index:25; display:flex; align-items:center; gap:.5rem; padding:.5rem .8rem; border:var(--bw) solid var(--line); border-radius:2rem; background:var(--card); color:var(--ink); font-size:.85rem; box-shadow:0 .2rem .6rem rgba(var(--shadow),.12); }
+.refresh-spinner{ width:.9rem; height:.9rem; border:.13rem solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:loaderSpin 1s linear infinite; }
+@keyframes pencilWrite{ from{ transform:rotate(-7deg) translateY(0); } to{ transform:rotate(4deg) translateY(-.13rem); } }
+@keyframes loaderSpin{ to{ transform:rotate(360deg); } }
+@keyframes loaderReady{ 50%{ transform:translateY(-.2rem); } }
+@media(prefers-reduced-motion:reduce){ .loader-pencil,.refresh-spinner,#dayLoader.complete .loader-paper{ animation:none; } .loader-fill,.loader-pencil{ transition:none; } }
+
 </style>
 <script>
-/* 테마를 화면이 그려지기 전에 입혀서 엉뚱한 화면이 번쩍이지 않게 합니다.
-   고른 테마 > 학교가 정한 기본값 > 맨 처음 한 번 쓰는 값(BOOT_THEME) 순입니다.
-   BOOT_THEME은 서버 답이 오기 전 첫 그림에만 쓰이고, 곧바로 학교 기본값으로
-   덮어써집니다. 진짜 설정은 Code.gs의 CONFIG.DEFAULT_THEME 한 곳뿐입니다. */
-var BOOT_THEME = 'hanji';
+/* 테마를 화면이 그려지기 전에 적용합니다.
+   교실에서 직접 고른 테마 > BOOT_THEME 순으로 적용합니다.
+   서버나 이전에 저장된 학교 기본값이 화면 기본값을 덮어쓰지 않습니다. */
+var BOOT_THEME = 'retro';
 try{
-  var t = localStorage.getItem('theme') || localStorage.getItem('theme:default') || BOOT_THEME;
+  var t = localStorage.getItem('theme') || BOOT_THEME;
   if (t && t !== 'light') document.documentElement.dataset.theme = t;
 }catch(e){ document.documentElement.dataset.theme = BOOT_THEME; }
 </script>
@@ -922,6 +945,19 @@ try{
   <button id="themeFab" type="button" aria-label="화면 테마 바꾸기" aria-expanded="false"
           title="화면 테마 바꾸기 (T)"></button>
 </div>
+
+
+<div id="dayLoader" hidden role="status" aria-live="polite">
+  <div class="loader-paper">
+    <div class="loader-kicker">오늘의 교실</div>
+    <h2 id="loaderHeading">교실의 하루를 준비해요</h2>
+    <div class="loader-track" aria-hidden="true"><div class="loader-fill"></div><div class="loader-pencil"><svg viewBox="0 0 40 40" fill="none"><path d="M5 35l3-11L29 3a3 3 0 0 1 4 0l4 4a3 3 0 0 1 0 4L16 32 5 35Z" fill="currentColor"/><path d="m8 24 8 8M26 6l8 8" stroke="var(--card)" stroke-width="2"/><path d="m5 35 2-6 4 4-6 2Z" fill="var(--ink)"/></svg></div></div>
+    <div class="loader-steps" aria-hidden="true"><span>교실 확인</span><span>자료 불러오기</span><span>준비 완료</span></div>
+    <p class="loader-caption" id="loaderCaption">우리 반을 확인하고 있어요.</p>
+    <button type="button" class="loader-retry" id="loaderRetry" hidden onclick="load(false, true, true)">다시 불러오기</button>
+  </div>
+</div>
+<div id="refreshNotice" role="status" aria-live="polite" hidden><span class="refresh-spinner" aria-hidden="true"></span><span>최신 자료를 확인하고 있어요</span></div>
 
 <div id="stale">연결 끊김 — 마지막 정보 표시 중</div>
 
@@ -1064,15 +1100,14 @@ const THEMES = [
   { id:'mono', name:'미니멀 스튜디오', a:'#EDEEEF', b:'#3E4D60', desc:'장식은 줄이고 내용에 집중' }
 ];
 /* BOOT_THEME은 머리말에서 정해 둔, 서버 답이 오기 전에만 쓰는 값입니다 */
-let THEME = (typeof BOOT_THEME === 'string') ? BOOT_THEME : 'bold';
+let THEME = (typeof BOOT_THEME === 'string') ? BOOT_THEME : 'retro';
 let THEME_CHOSEN = false;        // 이 교실에서 직접 골랐는가 (골랐으면 계속 우선한다)
 try{
   const saved = localStorage.getItem('theme');
   if (saved && THEMES.some(function(t){ return t.id === saved; })){
     THEME = saved; THEME_CHOSEN = true;
   } else {
-    const fromSchool = localStorage.getItem('theme:default');
-    if (fromSchool && THEMES.some(function(t){ return t.id === fromSchool; })) THEME = fromSchool;
+    THEME = BOOT_THEME;
   }
 }catch(err){ /* 저장 공간을 못 쓰면 BOOT_THEME 그대로 간다 */ }
 
@@ -1140,6 +1175,8 @@ let loadSeq = 0, prefetchTimer = null;
 const ZOOM_MIN = 0.7, ZOOM_MAX = 1.35, ZOOM_STEP = 0.05;
 let ZOOM = 1, zoomToastTimer = null;
 try{ ZOOM = clampZoom(parseFloat(localStorage.getItem('zoom'))); }catch(err){ ZOOM = 1; }
+
+let loaderWaitTimer = null, loaderFinishTimer = null;
 
 init();
 
@@ -1482,13 +1519,52 @@ function setPending(on, ymd){
  * @param {boolean} prefetch 끝난 뒤 앞뒤 하루를 미리 받아 둔다
  * @param {boolean} fresh    보관된 값을 건너뛰고 서버에서 새로 받아온다
  */
+function loadingStage(step){
+  const panel = document.getElementById('dayLoader');
+  panel.style.setProperty('--progress', ['12%','55%','100%'][step]);
+  panel.querySelectorAll('.loader-steps span').forEach(function(el, i){ el.classList.toggle('active', i <= step); });
+  document.getElementById('loaderCaption').textContent = ['우리 반을 확인하고 있어요.','시간표와 급식, 학사일정을 가져오고 있어요.','준비됐어요. 오늘도 좋은 하루 보내세요!'][step];
+}
+function beginDayLoading(){
+  clearTimeout(loaderWaitTimer); clearTimeout(loaderFinishTimer);
+  const panel = document.getElementById('dayLoader');
+  panel.hidden = !!DATA;
+  panel.classList.remove('complete');
+  document.getElementById('refreshNotice').hidden = !DATA;
+  document.getElementById('loaderRetry').hidden = true;
+  document.getElementById('loaderHeading').textContent = '교실의 하루를 준비해요';
+  loadingStage(0);
+  loaderWaitTimer = setTimeout(function(){
+    if (panel.hidden) return;
+    document.getElementById('loaderCaption').textContent = '학교 자료에 연결하고 있어요. 잠시만 기다려 주세요.';
+    document.getElementById('loaderRetry').hidden = false;
+  }, 15000);
+}
+function endDayLoading(ok){
+  clearTimeout(loaderWaitTimer);
+  document.getElementById('refreshNotice').hidden = true;
+  const panel = document.getElementById('dayLoader');
+  if (panel.hidden) return;
+  if (!ok){
+    document.getElementById('loaderHeading').textContent = '연결을 잠시 확인해 주세요';
+    document.getElementById('loaderCaption').textContent = '자료를 가져오지 못했어요. 잠시 후 다시 시도해 주세요.';
+    document.getElementById('loaderRetry').hidden = false;
+    return;
+  }
+  loadingStage(2); panel.classList.add('complete');
+  loaderFinishTimer = setTimeout(function(){ panel.hidden = true; }, 500);
+}
+
 async function load(useCache, prefetch, fresh){
   const target = VIEW_DATE;
   const seq = ++loadSeq;
+  clearTimeout(loaderWaitTimer); clearTimeout(loaderFinishTimer);
   const hit = dayCache[dayKey(target)];
 
   if (useCache && hit){
     showDay(hit.data);
+    document.getElementById('dayLoader').hidden = true;
+    document.getElementById('refreshNotice').hidden = true;
     setPending(false);
     if (fresh || Date.now() - hit.at >= CACHE_TTL_MS) revalidate(target, seq, fresh);
     if (prefetch) queuePrefetch(target);
@@ -1496,30 +1572,37 @@ async function load(useCache, prefetch, fresh){
   }
 
   setPending(true, target);
+  beginDayLoading();
+  let loaded = false;
   try{
     // 화살표를 연달아 누를 때 지나친 날짜까지 서버에 묻지 않도록 잠깐 기다린다
     await new Promise(function(done){ setTimeout(done, 180); });
     if (seq !== loadSeq) return;
 
+    loadingStage(1);
     const data = await fetchDay(target, fresh);
     if (seq !== loadSeq) return;          // 그새 날짜가 또 바뀌었으면 버린다
     showDay(data);
+    loaded = true;
   }catch(err){
     console.error('불러오기 실패', err);
     setStale(Date.now() - lastOkAt > REFRESH_MS * 2.5);
   }finally{
-    if (seq === loadSeq) setPending(false);
+    if (seq === loadSeq){ setPending(false); endDayLoading(loaded); }
   }
   if (prefetch) queuePrefetch(target);
 }
 
 /** 캐시로 먼저 그린 뒤 조용히 최신 값으로 바꿔치기 */
 async function revalidate(ymd, seq, fresh){
+  if (seq === loadSeq) document.getElementById('refreshNotice').hidden = false;
   try{
     const data = await fetchDay(ymd, fresh);
     if (seq === loadSeq && VIEW_DATE === ymd) showDay(data);
   }catch(err){
     console.error('갱신 실패', err);
+  }finally{
+    if (seq === loadSeq) document.getElementById('refreshNotice').hidden = true;
   }
 }
 
@@ -1874,10 +1957,11 @@ function applyTheme(id, save){
 }
 
 /**
- * 학교가 정한 기본 테마(Code.gs의 CONFIG.DEFAULT_THEME)를 받아 둔다.
+ * 화면의 기본 테마(BOOT_THEME)를 적용하고 저장한다.
  * 교실에서 T 키로 직접 고른 적이 있으면 그 교실에서는 바꾸지 않는다.
  */
 function rememberDefaultTheme(id){
+  id = BOOT_THEME; // 기본값은 이 화면에서 관리하며, 교실에서 직접 고른 값은 유지한다.
   if (!id || !THEMES.some(function(t){ return t.id === id; })) return;
   try{ localStorage.setItem('theme:default', id); }catch(err){}
   if (!THEME_CHOSEN && id !== THEME) applyTheme(id, false);
