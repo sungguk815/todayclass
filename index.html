@@ -739,6 +739,11 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 }
 
 .mealcard .info.allergy  { font-size:1.1rem; font-weight:800; color:var(--note); margin-top:auto; padding-top:.3rem; }
+/* 탄수화물 · 단백질 · 지방 : 알레르기 바로 위, 칸 아래쪽에 함께 붙는다 */
+.mealcard .info.macro    { font-size:1.05rem; font-weight:800; color:var(--ink); margin-top:auto; padding-top:.3rem;
+  font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; }
+.mealcard .info.macro .label{ color:var(--meal); }
+.mealcard .info.macro + .info.allergy{ margin-top:0; }
 .mealcard .info.nutrition{ font-size:.8rem;  font-weight:700; color:var(--soft); }
 .mealcard .info.origin   { font-size:.78rem; font-weight:700; color:var(--soft); }
 
@@ -1059,7 +1064,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.22-1';
+const APP_VERSION = '2026.11.22-2';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
@@ -2246,6 +2251,8 @@ function renderMeal(){
   if (hidden > 0) items += '<li class="more">외 ' + hidden + '개<' + '/li>';
 
   const allergyNote   = allergyLegend(dishes);
+  // 3대 영양소(탄수화물·단백질·지방)는 창을 열지 않아도 보이게 알레르기 바로 위에 한 줄로 둔다
+  const macroNote     = formatMacroNote(lunch.nutrition);
 
   // 사진이 없으면 빈 상자를 두지 않고 그 자리를 메뉴에 준다
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
@@ -2258,6 +2265,7 @@ function renderMeal(){
 
   const html = '<div class="body">'
     +   '<div class="top' + (photoUrl ? '' : ' nophoto') + '"><ul>' + items + '<' + '/ul>' + photo + '<' + '/div>'
+    +   (macroNote ? '<div class="info macro"><b class="label">영양<' + '/b><span>' + esc(macroNote) + '<' + '/span><' + '/div>' : '')
     +   infoRow('allergy',   '알레르기', allergyNote)
     + '<' + '/div>';
 
@@ -2324,6 +2332,14 @@ function allergyLegend(dishes){
   const keys = Object.keys(seen).map(Number).sort(function(a, b){ return a - b; });
   if (!keys.length) return '';
   return keys.map(function(k){ return k + ' ' + ALLERGY_NAMES[k]; }).join(' · ');
+}
+/** 나이스 영양정보에서 탄수화물·단백질·지방만 골라 '탄수화물 162.9g · 단백질 31.7g · 지방 24.1g' */
+function formatMacroNote(list){
+  if (!list || !list.length) return '';
+  return ['탄수화물', '단백질', '지방'].map(function(name){
+    const hit = list.find(function(x){ return String(x.name || '').indexOf(name) === 0; });
+    return hit ? name + ' ' + hit.value + (hit.unit || '') : '';
+  }).filter(Boolean).join(' · ');
 }
 function formatNutritionNote(list){
   if (!list || !list.length) return '';
