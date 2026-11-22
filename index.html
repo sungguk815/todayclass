@@ -656,8 +656,20 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 .mealcard .shotbox img{ width:100%; height:100%; object-fit:contain; display:block; }
 .mealcard .shotbox .empty{ font-size:1.05rem; font-weight:800; color:var(--soft);
   text-align:center; padding:.6rem; line-height:1.35; }
-.mealcard .kcal{ margin-left:.35rem; font-size:1.15rem; font-weight:900;
-  color:var(--note); letter-spacing:-.02em; }
+.mealcard .kcal{ margin-left:.35rem; font-size:1.05rem; font-weight:800;
+  color:var(--soft); letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+/* 영양 · 원산지 : 작은 글씨 두 줄 대신 눌러서 크게 보는 창 */
+.mealcard .meal-more{ margin-left:auto; padding:.18rem .6rem; border:var(--bw) solid var(--line);
+  border-radius:.35rem; background:var(--chip); color:var(--chip-ink); font:inherit;
+  font-size:.85rem; font-weight:800; cursor:pointer; white-space:nowrap; }
+.mealcard .meal-more:hover,.mealcard .meal-more:focus-visible{ border-color:var(--meal); color:var(--meal); outline:none; }
+/* 메뉴 이름이 알레르기 번호 때문에 두 줄로 쪼개지지 않게 */
+.mealcard li{ white-space:nowrap; }
+/* 사진이 없는 날은 메뉴가 칸을 넓게 쓰고 글자도 키운다 */
+.mealcard .top.nophoto ul{ gap:.2rem 1.6rem; }
+.mealcard .top.nophoto li{ font-size:1.8rem; }
+/* 알레르기 줄을 칸 맨 아래에 붙이기 위해 본문이 남은 높이를 다 쓰게 한다 */
+#mealBody{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
 
 /* 사진을 누르면 크게 볼 수 있다는 표시 */
 .mealcard .shotbox.zoomable{ cursor:zoom-in; }
@@ -726,7 +738,7 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
   to{ transform:translateX(calc(-50% - var(--marquee-gap) / 2)); }
 }
 
-.mealcard .info.allergy  { font-size:.86rem; font-weight:800; color:var(--note); }
+.mealcard .info.allergy  { font-size:1.1rem; font-weight:800; color:var(--note); margin-top:auto; padding-top:.3rem; }
 .mealcard .info.nutrition{ font-size:.8rem;  font-weight:700; color:var(--soft); }
 .mealcard .info.origin   { font-size:.78rem; font-weight:700; color:var(--soft); }
 
@@ -765,11 +777,16 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--week-ink); }
 .weekcard col.today{ background:var(--today-col); }
 .weekcard td.today{ font-weight:900; }
+.weekcard td.empty{ color:var(--done-soft); font-weight:600; opacity:.6; }
+/* 휴업일처럼 하루가 통째로 비는 날 : 한 칸으로 합쳐 세로로 한 번만 */
+.weekcard td.dayoff{ vertical-align:middle; color:var(--soft); font-weight:800; white-space:normal;
+  background:repeating-linear-gradient(135deg, transparent 0 .45rem, color-mix(in srgb, var(--line) 45%, transparent) .45rem .55rem); }
+.weekcard td.dayoff span{ display:inline-block; writing-mode:vertical-rl; text-orientation:upright;
+  letter-spacing:.12em; font-size:1.05rem; line-height:1.1; }
 
 /* ── 상태 · 설정 ───────────────────────────────────────── */
-#stale{ position:fixed; right:1rem; bottom:.3rem; font-size:.95rem; font-weight:800;
-  color:var(--note); opacity:0; transition:opacity .4s; }
-#stale.show{ opacity:1; }
+#stale{ display:none; flex:0 0 auto; font-size:.95rem; font-weight:800; color:var(--note); white-space:nowrap; }
+#stale.show{ display:block; }
 #setup{ position:fixed; inset:0; background:var(--bg); display:none; flex-direction:column;
   align-items:center; justify-content:center; gap:1.7rem; cursor:auto; z-index:30; }
 #setup.show{ display:flex; }
@@ -836,6 +853,18 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 }
 .cal-month .empty{ text-align:center; padding:2rem 1rem; }
 
+/* ── 영양 · 원산지 창 (학사일정 창의 틀을 같이 씁니다) ── */
+#mealDetail{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; padding:1.2rem; }
+#mealDetail.show{ display:flex; }
+.meal-dialog{ width:min(46rem, 100%); }
+.meal-dialog h2{ text-align:left !important; padding-left:.3rem; }
+#mealDetailBody{ display:grid; grid-template-columns:1fr 1.6fr; gap:1.4rem; }
+#mealDetailBody h3{ font-size:1.15rem; font-weight:900; color:var(--meal); margin-bottom:.5rem; }
+#mealDetailBody dl{ display:grid; grid-template-columns:max-content 1fr; gap:.3rem .9rem; font-size:1.05rem; line-height:1.35; }
+#mealDetailBody dt{ font-weight:800; color:var(--soft); }
+#mealDetailBody dd{ font-weight:800; color:var(--ink); }
+@media(max-aspect-ratio:1/1){ #mealDetailBody{ grid-template-columns:1fr; } }
+
 @media (prefers-reduced-motion:reduce){
   .slot,.slot .bar > i{ transition:none; }
   .head .date.loading{ animation:none; opacity:.6; }
@@ -846,7 +875,7 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 .card{ box-shadow:var(--card-shadow, none); }
 
 /* 첫 화면은 공책 위에 연필로 준비 과정을 그립니다. */
-#dayLoader{ position:fixed; inset:0; z-index:24; display:grid; place-items:center; background:var(--bg); background-image:var(--backdrop, none); }
+#dayLoader{ position:fixed; inset:0; z-index:29;   /* 테마 버튼(28)까지 덮는다 — 준비 화면 위에 버튼이 떠 있지 않게 */ display:grid; place-items:center; background:var(--bg); background-image:var(--backdrop, none); }
 .loader-paper{ width:min(31rem,90vw); padding:2rem 2.3rem; border:var(--bw) solid var(--line); border-radius:var(--r-card); background:var(--card); box-shadow:.3rem .4rem 0 var(--line); text-align:center; }
 .loader-kicker{ color:var(--accent); font-size:.85rem; font-weight:800; letter-spacing:.12em; }
 .loader-paper h2{ margin:.7rem 0 .5rem; font-size:1.7rem; color:var(--ink); }
@@ -861,7 +890,19 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 .loader-retry:focus-visible{ outline:.15rem solid var(--accent); outline-offset:.2rem; }
 #dayLoader.complete .loader-pencil{ animation:none; }
 #dayLoader.complete .loader-paper{ animation:loaderReady .35s ease; }
-#refreshNotice{ position:fixed; right:1.1rem; bottom:1rem; z-index:25; display:flex; align-items:center; gap:.5rem; padding:.5rem .8rem; border:var(--bw) solid var(--line); border-radius:2rem; background:var(--card); color:var(--ink); font-size:.85rem; box-shadow:0 .2rem .6rem rgba(var(--shadow),.12); }
+#refreshNotice{ flex:0 0 auto; display:flex; align-items:center; gap:.45rem; padding:.3rem .7rem; border-radius:2rem; background:var(--tone); color:var(--soft); font-size:.85rem; font-weight:800; white-space:nowrap; }
+#calBody{ flex:1 1 auto; min-width:0; overflow:hidden; }
+/* 오른쪽 아래 테마 버튼이 띠 바로 위에 떠 있으므로, 알림은 띠 안에서만 보이게 한다 */
+
+/* 다른 날짜를 받는 동안 : 예전 날짜의 내용이 새 날짜처럼 보이지 않게 흐리게 덮는다 */
+.line, .mealcard, .weekcard{ position:relative; transition:opacity .2s ease; }
+#app.switching .line > *, #app.switching .mealcard > *, #app.switching .weekcard > *{ opacity:.18; }
+#app.switching .line::after, #app.switching .mealcard::after, #app.switching .weekcard::after{
+  content:'불러오는 중…'; position:absolute; inset:0; display:grid; place-items:center;
+  font-size:1.5rem; font-weight:900; color:var(--soft); pointer-events:none;
+  animation:datePulse 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion:reduce){ #app.switching .line::after, #app.switching .mealcard::after, #app.switching .weekcard::after{ animation:none; } }
 .refresh-spinner{ width:.9rem; height:.9rem; border:.13rem solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:loaderSpin 1s linear infinite; }
 @keyframes pencilWrite{ from{ transform:rotate(-7deg) translateY(0); } to{ transform:rotate(4deg) translateY(-.13rem); } }
 @keyframes loaderSpin{ to{ transform:rotate(360deg); } }
@@ -932,6 +973,9 @@ try{
     <span>일정</span>
   </div>
   <div id="calBody"></div>
+  <!-- 상태 알림은 일정 띠 안 오른쪽 끝에 둡니다 (예전엔 띠 위에 겹쳐 떴습니다) -->
+  <div id="refreshNotice" role="status" aria-live="polite" hidden><span class="refresh-spinner" aria-hidden="true"></span><span>최신 자료 확인 중</span></div>
+  <div id="stale">연결 끊김 — 마지막 정보 표시 중</div>
 </div>
 
 <div id="tip" aria-hidden="true"><div class="box" id="tipBox"></div></div>
@@ -957,9 +1001,6 @@ try{
     <button type="button" class="loader-retry" id="loaderRetry" hidden onclick="load(false, true, true)">다시 불러오기</button>
   </div>
 </div>
-<div id="refreshNotice" role="status" aria-live="polite" hidden><span class="refresh-spinner" aria-hidden="true"></span><span>최신 자료를 확인하고 있어요</span></div>
-
-<div id="stale">연결 끊김 — 마지막 정보 표시 중</div>
 
 <div id="setup">
   <div class="brand">
@@ -977,6 +1018,17 @@ try{
   <div class="photo-backdrop"></div>
   <img id="photoBig" alt="급식 사진 크게 보기">
   <div class="photo-close">닫기</div>
+</div>
+
+<div id="mealDetail" aria-hidden="true">
+  <div class="cal-backdrop" id="mealDetailBackdrop"></div>
+  <div class="cal-dialog meal-dialog" role="dialog" aria-modal="true" aria-labelledby="mealDetailTitle">
+    <div class="cal-dialog-head">
+      <h2 id="mealDetailTitle">영양 · 원산지</h2>
+      <button type="button" class="navbtn close" id="mealDetailClose">닫기</button>
+    </div>
+    <div class="cal-month" id="mealDetailBody"></div>
+  </div>
 </div>
 
 <div id="calModal" aria-hidden="true">
@@ -1007,7 +1059,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.17-1';
+const APP_VERSION = '2026.11.22-1';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
@@ -1169,6 +1221,8 @@ let mealHtml = '';        // 급식 칸을 쓸데없이 다시 만들지 않기 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const dayCache = {};      // 날짜별로 받아온 응답
 const prefetching = {};   // 미리 받는 중인 날짜
+const inflight = {};      // 지금 받고 있는 날짜 → 그 요청 (같은 날짜를 두 번 묻지 않게)
+let MEAL_DETAIL = { nutrition:[], origin:[] };   // 영양 · 원산지 창에 보여 줄 내용
 let loadSeq = 0, prefetchTimer = null;
 
 /* 1.35를 넘기면 급식·주간 시간표 칸이 눌리므로 여기까지만 확대합니다 */
@@ -1303,6 +1357,7 @@ function bindDateNav(){
     }
     if (e.key === 'Escape'){
       if (closePhoto()) return;
+      if (closeMealDetail()) return;
       if (themePanelOpen()){ showThemePanel(false); return; }
       if (closeCalModal()) return;
       if (tipPeriod != null){ hideTip(); return; }
@@ -1316,6 +1371,7 @@ function bindDateNav(){
     if (document.getElementById('setup').classList.contains('show')) return;
     if (document.getElementById('calModal').classList.contains('show')) return;
     if (photoOpen()) return;
+    if (document.getElementById('mealDetail').classList.contains('show')) return;
     if (e.key === 'ArrowLeft') moveDay(-1);
     if (e.key === 'ArrowRight') moveDay(1);
     if (e.key === 'Home') goToday(true);
@@ -1323,7 +1379,7 @@ function bindDateNav(){
 }
 
 function moveDay(step){
-  hideTip(); closePhoto();
+  hideTip(); closePhoto(); closeMealDetail();
   const base = VIEW_DATE || (DATA && DATA.date) || todayYmd();
   VIEW_DATE = shiftYmd(base, step);
   if (VIEW_DATE === todayYmd()) VIEW_DATE = null;
@@ -1419,6 +1475,20 @@ function edgeFailed(err){
   setTimeout(function(){ edgeOk = true; }, 5 * 60 * 1000);
 }
 
+/* 같은 날짜를 이미 받고 있으면 새로 묻지 않고 그 결과를 함께 기다립니다.
+   미리 받기가 진행 중일 때 화살표를 누르면 같은 요청이 두 번 나가
+   서버 응답(10초 넘게 걸릴 때가 있음)을 처음부터 다시 기다리던 문제를 막습니다.
+   (inflight 는 init() 보다 먼저 선언되어야 하므로 dayCache 옆에 둡니다) */
+function fetchDayShared(ymd, fresh){
+  const key = dayKey(ymd);
+  if (!fresh && inflight[key]) return inflight[key];
+  const job = fetchDay(ymd, fresh).finally(function(){
+    if (inflight[key] === job) delete inflight[key];
+  });
+  inflight[key] = job;
+  return job;
+}
+
 /** @param {boolean} fresh 캐시를 건너뛰고 서버에서 새로 받아온다 */
 async function fetchDay(ymd, fresh){
   let res = null;
@@ -1492,10 +1562,10 @@ function queueFollowUp(ymd){
     if (VIEW_DATE !== (ymd || null)) return;
     const seq = loadSeq;
     try{
-      const data = await fetchDay(ymd);
+      const data = await fetchDayShared(ymd);
       if (seq === loadSeq && VIEW_DATE === (ymd || null)) showDay(data);
     }catch(err){ /* 다음 자동 갱신 때 다시 받는다 */ }
-  }, 6000);
+  }, 15000);    // 앞단이 Apps Script에서 새 값을 받는 데 12~15초 걸린다
 }
 
 function showDay(data){
@@ -1511,7 +1581,18 @@ function setPending(on, ymd){
   if (!on) return;
   const target = ymd || todayYmd();
   box.classList.toggle('preview', target !== todayYmd());
-  box.innerHTML = esc(formatDotDate(target)) + '<span class="sub">조회<' + '/span>';
+  box.innerHTML = dateBoxText(target);
+}
+
+/** 날짜 이동 칸 글자 — 오늘이면 '오늘', 다른 날이면 '11.23.(월)' */
+function dateBoxText(ymd, weekday){
+  if (!ymd || ymd === todayYmd()) return '오늘';
+  return esc(formatDotDate(ymd, weekday));
+}
+
+/** 다른 날짜를 받는 동안 본문을 흐리게 — 날짜와 내용이 어긋나 보이지 않게 */
+function setSwitching(on){
+  document.getElementById('app').classList.toggle('switching', !!on && !!DATA);
 }
 
 /**
@@ -1525,12 +1606,13 @@ function loadingStage(step){
   panel.querySelectorAll('.loader-steps span').forEach(function(el, i){ el.classList.toggle('active', i <= step); });
   document.getElementById('loaderCaption').textContent = ['우리 반을 확인하고 있어요.','시간표와 급식, 학사일정을 가져오고 있어요.','준비됐어요. 오늘도 좋은 하루 보내세요!'][step];
 }
-function beginDayLoading(){
+function beginDayLoading(switching){
   clearTimeout(loaderWaitTimer); clearTimeout(loaderFinishTimer);
   const panel = document.getElementById('dayLoader');
   panel.hidden = !!DATA;
   panel.classList.remove('complete');
-  document.getElementById('refreshNotice').hidden = !DATA;
+  // 날짜를 옮기는 중이면 본문 가운데 안내가 따로 뜨므로 아래 알림은 겹쳐 띄우지 않는다
+  document.getElementById('refreshNotice').hidden = !DATA || !!switching;
   document.getElementById('loaderRetry').hidden = true;
   document.getElementById('loaderHeading').textContent = '교실의 하루를 준비해요';
   loadingStage(0);
@@ -1562,6 +1644,7 @@ async function load(useCache, prefetch, fresh){
   const hit = dayCache[dayKey(target)];
 
   if (useCache && hit){
+    setSwitching(false);
     showDay(hit.data);
     document.getElementById('dayLoader').hidden = true;
     document.getElementById('refreshNotice').hidden = true;
@@ -1572,7 +1655,9 @@ async function load(useCache, prefetch, fresh){
   }
 
   setPending(true, target);
-  beginDayLoading();
+  const switching = !!DATA && (DATA.date !== (target || todayYmd()));
+  setSwitching(switching);
+  beginDayLoading(switching);
   let loaded = false;
   try{
     // 화살표를 연달아 누를 때 지나친 날짜까지 서버에 묻지 않도록 잠깐 기다린다
@@ -1580,7 +1665,7 @@ async function load(useCache, prefetch, fresh){
     if (seq !== loadSeq) return;
 
     loadingStage(1);
-    const data = await fetchDay(target, fresh);
+    const data = await fetchDayShared(target, fresh);
     if (seq !== loadSeq) return;          // 그새 날짜가 또 바뀌었으면 버린다
     showDay(data);
     loaded = true;
@@ -1588,7 +1673,7 @@ async function load(useCache, prefetch, fresh){
     console.error('불러오기 실패', err);
     setStale(Date.now() - lastOkAt > REFRESH_MS * 2.5);
   }finally{
-    if (seq === loadSeq){ setPending(false); endDayLoading(loaded); }
+    if (seq === loadSeq){ setPending(false); setSwitching(false); endDayLoading(loaded); }
   }
   if (prefetch) queuePrefetch(target);
 }
@@ -1597,7 +1682,7 @@ async function load(useCache, prefetch, fresh){
 async function revalidate(ymd, seq, fresh){
   if (seq === loadSeq) document.getElementById('refreshNotice').hidden = false;
   try{
-    const data = await fetchDay(ymd, fresh);
+    const data = await fetchDayShared(ymd, fresh);
     if (seq === loadSeq && VIEW_DATE === ymd) showDay(data);
   }catch(err){
     console.error('갱신 실패', err);
@@ -1610,12 +1695,13 @@ async function revalidate(ymd, seq, fresh){
 function queuePrefetch(ymd){
   clearTimeout(prefetchTimer);
   const base = ymd || todayYmd();
-  prefetchTimer = setTimeout(async function(){
-    for (const step of [1, -1]){
+  // 앞날과 뒷날을 동시에 받는다 — 하나씩 받으면 서버가 느릴 때 30초 가까이 걸린다
+  prefetchTimer = setTimeout(function(){
+    [1, -1].forEach(function(step){
       const next = shiftYmd(base, step);
-      await prefetchDay(next === todayYmd() ? null : next);
-    }
-  }, 1200);
+      prefetchDay(next === todayYmd() ? null : next);
+    });
+  }, 300);
 }
 
 async function prefetchDay(ymd){
@@ -1625,7 +1711,7 @@ async function prefetchDay(ymd){
   if (prefetching[key]) return;
   prefetching[key] = true;
   try{
-    await fetchDay(ymd);
+    await fetchDayShared(ymd);
   }catch(err){
     /* 미리 받기 실패는 조용히 넘어간다 — 실제 조회 때 다시 시도한다 */
   }finally{
@@ -1656,18 +1742,21 @@ function updateScreenSync(){
   const el = document.getElementById('screenSync');
   if (!el || !DATA) return;
   const sync = DATA.screenSync;
+  // 늘 떠 있는 안내는 빨간 글씨로 두면 정작 중요한 경고(바뀐 교시 등)가 묻힌다.
+  // 짧은 회색 한 줄로 두고, 자세한 설명은 마우스를 올리면 보이게 한다.
   const failedMessage = "실시간 수업 변경 조회가 안됩니다. 변경 수업은 '컴시간학생.kr'에서 확인하세요.";
+  const failedShort = 'ⓘ 수업 변경은 컴시간학생.kr에서 확인';
   el.style.color = '';
   el.title = '';
   if (!sync) {
     const rows = DATA.timetable && DATA.timetable.value;
-    el.textContent = rows && rows.some(function(p){ return p.source === 'neis'; }) ? failedMessage : '';
-    el.title = el.textContent;
+    const neis = rows && rows.some(function(p){ return p.source === 'neis'; });
+    el.textContent = neis ? failedShort : '';
+    el.title = neis ? failedMessage : '';
     return;
   }
   if (sync.fallback) {
-    el.textContent = failedMessage;
-    el.style.color = '#c43b26';
+    el.textContent = failedShort;
     el.title = failedMessage;
     return;
   }
@@ -1675,8 +1764,7 @@ function updateScreenSync(){
   const checkedAt = sync.verifiedAt || sync.capturedAt;
   const stale = !sync.ok || !checkedAt || (sync.staleAt ? Date.now() > sync.staleAt : Date.now() - checkedAt > 120000);
   const time = checkedAt ? new Date(checkedAt).toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }) : '';
-  el.textContent = stale ? failedMessage : '컴시간 화면 확인 ' + time;
-  el.style.color = stale ? '#c43b26' : '';
+  el.textContent = stale ? failedShort : '컴시간 화면 확인 ' + time;
   el.title = stale ? failedMessage + (time ? ' 마지막 확인: ' + time : '') : ('컴시간 수정일: ' + sync.updatedAt);
 }
 
@@ -1736,8 +1824,7 @@ function render(){
 
 function renderDate(){
   const d = DATA.date;
-  document.getElementById('date').innerHTML =
-    esc(formatDotDate(d, DATA.weekday)) + '<span class="sub">조회<' + '/span>';
+  document.getElementById('date').innerHTML = dateBoxText(d, DATA.weekday);
   const on = isPreview();
   document.getElementById('date').classList.toggle('preview', on);
   const btn = document.getElementById('goToday');
@@ -2131,9 +2218,18 @@ function renderMeal(){
     return;
   }
   const lunch = m.value.find(function(x){ return /중식/.test(x.type); }) || m.value[0];
-  const kcal = String(lunch.kcal || '').trim();
+  const kcal = formatKcal(lunch.kcal);
+  const nutritionNote = formatNutritionNote(lunch.nutrition);
+  const originNote    = String(lunch.origin || '').trim();
+  // 영양·원산지는 교실 뒤에서 읽히지 않는 작은 글씨였으므로, 눌러서 크게 보는 창으로 옮겼다
+  const detail = (nutritionNote || originNote)
+    ? '<button type="button" class="meal-more" id="mealMore">영양 · 원산지<' + '/button>' : '';
   title.innerHTML = ICON.meal + '<span>' + mealLabel + '<' + '/span>'
-    + (kcal ? '<span class="kcal">' + esc(kcal) + '<' + '/span>' : '');
+    + (kcal ? '<span class="kcal">' + esc(kcal) + '<' + '/span>' : '') + detail;
+  MEAL_DETAIL = {
+    nutrition:(lunch.nutrition || []).map(function(x){ return [x.name, x.value + (x.unit || '')]; }),
+    origin:parseOrigin(originNote)
+  };
 
   // 메뉴가 MAX_MEAL보다 많으면 예전에는 조용히 사라졌습니다. 이제 몇 개가
   // 더 있는지 알려 줍니다.
@@ -2150,22 +2246,19 @@ function renderMeal(){
   if (hidden > 0) items += '<li class="more">외 ' + hidden + '개<' + '/li>';
 
   const allergyNote   = allergyLegend(dishes);
-  const nutritionNote = formatNutritionNote(lunch.nutrition);
-  const originNote    = String(lunch.origin || '').trim();
 
+  // 사진이 없으면 빈 상자를 두지 않고 그 자리를 메뉴에 준다
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
   const photo = photoUrl
     ? '<div class="shotbox zoomable" title="누르면 크게 보입니다">'
         + '<img src="' + esc(photoUrl) + '" alt="급식 사진" onerror="mealPhotoFallback(this)">'
         + '<span class="zoomhint">' + ICON.zoom + '<' + '/span>'
       + '<' + '/div>'
-    : '<div class="shotbox"><div class="empty">이미지가 없습니다<' + '/div><' + '/div>';
+    : '';
 
   const html = '<div class="body">'
-    +   '<div class="top"><ul>' + items + '<' + '/ul>' + photo + '<' + '/div>'
+    +   '<div class="top' + (photoUrl ? '' : ' nophoto') + '"><ul>' + items + '<' + '/ul>' + photo + '<' + '/div>'
     +   infoRow('allergy',   '알레르기', allergyNote)
-    +   infoRow('nutrition', '영양',     nutritionNote)
-    +   infoRow('origin',    '원산지',   originNote)
     + '<' + '/div>';
 
   // 내용이 그대로면 손대지 않습니다. 3분마다 다시 만들면 흐르던 자막이
@@ -2242,10 +2335,55 @@ function formatNutritionNote(list){
 function mealPhotoFallback(img){
   if (!img || !img.parentNode) return;
   const box = img.parentNode;
-  box.classList.remove('zoomable');            // 없는 사진을 크게 볼 수는 없다
-  box.removeAttribute('title');
-  box.innerHTML = '<div class="empty">이미지가 없습니다<' + '/div>';
+  const top = box.parentNode;
+  box.remove();                                // 빈 상자 대신 메뉴가 넓게 쓴다
+  if (top) top.classList.add('nophoto');
   mealHtml = '';                               // 다음 갱신 때 한 번 더 받아 본다
+  setupMarquee();
+}
+
+/** '996.0 Kcal' → '996 kcal' */
+function formatKcal(raw){
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const n = parseFloat(text.replace(/,/g, ''));
+  return isFinite(n) ? Math.round(n).toLocaleString('ko-KR') + ' kcal' : text;
+}
+
+/* ── 영양 · 원산지 크게 보기 ───────────────────────────────── */
+/** 나이스 원산지 글 '쇠고기 : 국내산 돼지고기 : 국내산 …' → [['쇠고기','국내산'], …] */
+function parseOrigin(text){
+  const out = [];
+  const re = /\s*([^:]+?)\s*:\s*(\S+?(?:\s또는\s\S+?)?)(?=\s|$)/g;
+  let m;
+  while ((m = re.exec(String(text || '')))){
+    if (m[1] && m[2] && m[1] !== '비고') out.push([m[1], m[2]]);
+  }
+  return out;
+}
+
+function openMealDetail(){
+  hideTip();
+  const table = function(title, list){
+    if (!list.length) return '';
+    return '<section><h3>' + title + '<' + '/h3><dl>' + list.map(function(r){
+      return '<dt>' + esc(r[0]) + '<' + '/dt><dd>' + esc(r[1]) + '<' + '/dd>';
+    }).join('') + '<' + '/dl><' + '/section>';
+  };
+  document.getElementById('mealDetailBody').innerHTML =
+    (table('영양 정보', MEAL_DETAIL.nutrition) + table('원산지', MEAL_DETAIL.origin))
+    || '<p>정보가 없습니다<' + '/p>';
+  const modal = document.getElementById('mealDetail');
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.remove('idle');
+}
+function closeMealDetail(){
+  const modal = document.getElementById('mealDetail');
+  if (!modal.classList.contains('show')) return false;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+  return true;
 }
 
 /* ── 급식 사진 크게 보기 ────────────────────────────────────
@@ -2265,6 +2403,13 @@ function bindPhotoZoom(){
 
   // 큰 사진은 어디를 눌러도 닫힙니다
   document.getElementById('photoModal').addEventListener('click', closePhoto);
+
+  // 영양 · 원산지 버튼은 제목과 함께 다시 그려지므로 제목 칸에 한 번만 단다
+  document.getElementById('mealTitle').addEventListener('click', function(e){
+    if (e.target.closest && e.target.closest('#mealMore')) openMealDetail();
+  });
+  document.getElementById('mealDetailClose').addEventListener('click', closeMealDetail);
+  document.getElementById('mealDetailBackdrop').addEventListener('click', closeMealDetail);
 }
 
 function openPhoto(src){
@@ -2316,22 +2461,54 @@ function renderWeek(){
     cols += '<col' + on + '>'; head += '<th' + on + '>' + d.weekday + '<' + '/th>';
   });
 
+  // 하루 전체가 같은 이름(재량휴업일 등)이거나 수업이 하나도 없는 날은
+  // 칸마다 되풀이하지 않고 한 칸으로 합쳐 세로로 한 번만 적는다.
+  const merged = days.map(function(d){
+    const ps = d.periods || [];
+    if (!ps.length) return dayOffName(d) || '수업 없음';
+    const first = ps[0].subject;
+    const same = ps.every(function(x){ return x.subject === first; });
+    if (same && (ps.length >= 4 || /휴|방학|공휴/.test(first))) return first;
+    return '';
+  });
+
   let rows = '';
   for (let p = 1; p <= maxP; p++){
     rows += '<tr><td class="period">' + p + '<' + '/td>';
-    days.forEach(function(d){
+    days.forEach(function(d, i){
+      const today = d.date === shown;
+      if (merged[i]){
+        if (p === 1){
+          // 세로 글씨에는 괄호 속 설명('(대입수능)')을 빼고 이름만, 전체는 마우스를 올리면 보인다
+          const short = merged[i].replace(/\s*\(.*\)\s*/, '') || merged[i];
+          rows += '<td rowspan="' + maxP + '" class="dayoff' + (today ? ' today' : '') + '" title="' + esc(merged[i]) + '">'
+                + '<span>' + esc(short) + '<' + '/span><' + '/td>';
+        }
+        return;
+      }
       const hit = d.periods.find(function(x){ return x.period === p; });
-      const on = d.date === shown ? ' class="today"' : '';
       // 과목마다 색을 같게 둔다. 선생님이 세로로 훑으며 '내 과목 다음 차시'를
       // 찾을 때 색이 길잡이가 되기 때문이다.
       // 오늘 열은 바탕색(--today-col)과 굵은 글씨로 따로 구분된다.
+      // 빈 교시는 옅은 줄표로 '수업 없음'을 드러낸다 (자료가 빠진 것처럼 보이지 않게).
+      const cls = (today ? 'today' : '') + (hit ? '' : ' empty');
       const st = hit ? ' style="color:' + subjectColor(hit.subject) + '"' : '';
-      rows += '<td' + on + st + '>' + (hit ? esc(hit.subject) : '') + '<' + '/td>';
+      rows += '<td class="' + cls.trim() + '"' + st + '>' + (hit ? esc(hit.subject) : '–') + '<' + '/td>';
     });
     rows += '<' + '/tr>';
   }
   box.innerHTML = '<table><colgroup>' + cols + '<' + '/colgroup>'
                 + '<thead><tr>' + head + '<' + '/tr><' + '/thead><tbody>' + rows + '<' + '/tbody><' + '/table>';
+}
+
+/** 수업이 없는 평일의 이름 (학사일정에서 찾는다) — 없으면 빈 글자 */
+function dayOffName(d){
+  const s = DATA && DATA.schedule;
+  if (!s || !s.ok || !s.value) return '';
+  const hit = s.value.find(function(e){
+    return e.date === d.date && !HIDE_EVENTS.some(function(k){ return e.name.indexOf(k) >= 0; });
+  });
+  return hit ? hit.name : '';
 }
 
 function renderCalendar(){
@@ -2651,7 +2828,8 @@ function formatDotDate(ymd, weekday){
  * 들춰본 날 것인지 헷갈립니다. 그래서 두 칸의 제목 앞에 날짜를 붙입니다.
  */
 function viewedDateLabel(){
-  if (!DATA || !DATA.date) return '';
+  // 오늘이면 머리말 시계 옆에 이미 날짜가 있으므로 제목에는 붙이지 않는다
+  if (!DATA || !DATA.date || DATA.date === todayYmd()) return '';
   return formatDotDate(DATA.date, DATA.weekday);
 }
 function shiftYmd(ymd, step){
