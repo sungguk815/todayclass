@@ -739,11 +739,32 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 }
 
 .mealcard .info.allergy  { font-size:1.1rem; font-weight:800; color:var(--note); margin-top:auto; padding-top:.3rem; }
-/* 탄수화물 · 단백질 · 지방 : 알레르기 바로 위, 칸 아래쪽에 함께 붙는다 */
-.mealcard .info.macro    { font-size:1.05rem; font-weight:800; color:var(--ink); margin-top:auto; padding-top:.3rem;
-  font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; }
-.mealcard .info.macro .label{ color:var(--meal); }
-.mealcard .info.macro + .info.allergy{ margin-top:0; }
+/* ── 영양 비율 막대 ─────────────────────────────────────────
+   색은 테마 색을 따른다 : 탄수화물 주황 · 단백질 초록 · 지방 파랑 · 기타 회색 */
+:root{ --n-carb:var(--cal); --n-prot:var(--meal); --n-fat:var(--accent); --n-etc:var(--soft);
+  --n-o1:var(--meal); --n-o2:var(--cal); --n-o3:var(--accent); --n-o4:var(--note); --n-o5:var(--soft); }
+.n-carb{ --n:var(--n-carb); } .n-prot{ --n:var(--n-prot); } .n-fat{ --n:var(--n-fat); } .n-etc{ --n:var(--n-etc); }
+.n-o1{ --n:var(--n-o1); } .n-o2{ --n:var(--n-o2); } .n-o3{ --n:var(--n-o3); } .n-o4{ --n:var(--n-o4); } .n-o5{ --n:var(--n-o5); }
+
+.nbar{ display:flex; gap:.12rem; height:.75rem; border-radius:.4rem; overflow:hidden;
+  background:var(--tone); animation:nfill 1.6s cubic-bezier(.2,.8,.2,1) both; }
+.nbar > i{ display:block; flex-grow:0; flex-shrink:1; min-width:.35rem; background:var(--n); }
+.nbar.lg{ height:1.3rem; border-radius:.5rem; margin:.35rem 0 .45rem; }
+/* 막대가 왼쪽에서부터 차오른다 */
+@keyframes nfill{ from{ clip-path:inset(0 100% 0 0 round .4rem); } to{ clip-path:inset(0 0 0 0 round .4rem); } }
+
+/* 급식 칸 : [영양] 막대 / 범례 — 알레르기 바로 위, 칸 아래쪽에 함께 붙는다 */
+.mealcard .info.nutri{ align-items:center; margin-top:auto; padding-top:.35rem; }
+.mealcard .info.nutri .label{ color:var(--meal); font-size:1.05rem; }
+.mealcard .info.nutri + .info.allergy{ margin-top:0; }
+.mealcard .nbox{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:.25rem; }
+.mealcard .nlegend{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:.1rem .5rem; font-size:.9rem; font-weight:800;
+  color:var(--ink); font-variant-numeric:tabular-nums; line-height:1.25; }
+.mealcard .nlegend span{ display:inline-flex; align-items:baseline; gap:.3rem; white-space:nowrap; }
+/* 이름 글자를 막대와 같은 색으로 칠하므로 따로 색 네모를 두지 않는다 (한 줄에 다 들어가게) */
+.mealcard .nlegend b{ color:var(--n); font-weight:900; }
+.mealcard .nlegend em{ font-style:normal; color:var(--soft); font-weight:800; }
+@media (prefers-reduced-motion:reduce){ .nbar{ animation:none; } }
 .mealcard .info.nutrition{ font-size:.8rem;  font-weight:700; color:var(--soft); }
 .mealcard .info.origin   { font-size:.78rem; font-weight:700; color:var(--soft); }
 
@@ -861,13 +882,37 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 /* ── 영양 · 원산지 창 (학사일정 창의 틀을 같이 씁니다) ── */
 #mealDetail{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; padding:1.2rem; }
 #mealDetail.show{ display:flex; }
-.meal-dialog{ width:min(46rem, 100%); }
+.meal-dialog{ width:min(64rem, 100%); max-height:min(92vh, 48rem); }
 .meal-dialog h2{ text-align:left !important; padding-left:.3rem; }
-#mealDetailBody{ display:grid; grid-template-columns:1fr 1.6fr; gap:1.4rem; }
-#mealDetailBody h3{ font-size:1.15rem; font-weight:900; color:var(--meal); margin-bottom:.5rem; }
-#mealDetailBody dl{ display:grid; grid-template-columns:max-content 1fr; gap:.3rem .9rem; font-size:1.05rem; line-height:1.35; }
-#mealDetailBody dt{ font-weight:800; color:var(--soft); }
-#mealDetailBody dd{ font-weight:800; color:var(--ink); }
+#mealDetailBody{ display:grid; grid-template-columns:1fr 1fr; gap:1.8rem; align-items:start; }
+#mealDetailBody .dsec{ min-width:0; }
+#mealDetailBody h3{ display:flex; align-items:baseline; gap:.6rem; font-size:1.3rem; font-weight:900;
+  color:var(--title); margin-bottom:.4rem; }
+#mealDetailBody h3 .big{ font-size:1.05rem; color:var(--soft); font-weight:800; }
+#mealDetailBody h4{ margin-top:.8rem; font-size:1rem; font-weight:900; color:var(--ink); }
+#mealDetailBody h4 small{ font-size:.8rem; font-weight:700; color:var(--soft); }
+/* 범례 표 : ● 이름 ··· 값 비율 */
+#mealDetailBody .nrows{ list-style:none; display:grid; gap:.2rem; }
+#mealDetailBody .nrows li{ display:grid; grid-template-columns:auto 1fr auto 3.6rem; align-items:center; gap:.5rem;
+  font-size:1.02rem; font-weight:800; font-variant-numeric:tabular-nums; }
+#mealDetailBody .nrows b{ color:var(--n); font-weight:900; }
+#mealDetailBody .nrows .v{ color:var(--ink); }
+#mealDetailBody .nrows em{ font-style:normal; text-align:right; color:var(--soft); }
+#mealDetailBody .dot{ display:inline-block; width:.75rem; height:.75rem; border-radius:.2rem; background:var(--n); }
+/* 비타민 · 무기질 타일 */
+#mealDetailBody .ntiles{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.4rem; margin-top:.4rem; }
+#mealDetailBody .ntiles div{ padding:.45rem .55rem; border-radius:.45rem; background:var(--tone);
+  border:var(--bw) solid var(--line); display:flex; flex-direction:column; gap:.1rem; }
+#mealDetailBody .ntiles span{ font-size:.82rem; font-weight:800; color:var(--soft); }
+#mealDetailBody .ntiles b{ font-size:1.15rem; font-weight:900; color:var(--ink); font-variant-numeric:tabular-nums; }
+#mealDetailBody .ntiles small{ margin-left:.15rem; font-size:.75rem; color:var(--soft); }
+/* 원산지 묶음 */
+#mealDetailBody .ogroup{ margin-top:.6rem; }
+#mealDetailBody .ogroup h4{ display:flex; align-items:center; gap:.4rem; margin:0 0 .3rem; color:var(--n); }
+#mealDetailBody .chips{ display:flex; flex-wrap:wrap; gap:.3rem; }
+#mealDetailBody .chips span{ padding:.18rem .55rem; border-radius:1rem; font-size:.92rem; font-weight:800;
+  color:var(--ink); background:color-mix(in srgb, var(--n) 14%, var(--card));
+  border:var(--bw) solid color-mix(in srgb, var(--n) 35%, var(--line)); }
 @media(max-aspect-ratio:1/1){ #mealDetailBody{ grid-template-columns:1fr; } }
 
 @media (prefers-reduced-motion:reduce){
@@ -1064,7 +1109,7 @@ let edgeOk = true;
 
 /* 판번호. 배포할 때마다 올리세요. '접속기록' 시트에 그대로 찍히므로
    어느 교실이 옛 화면을 쓰고 있는지 한눈에 알 수 있습니다. */
-const APP_VERSION = '2026.11.22-2';
+const APP_VERSION = '2026.11.22-3';
 
 /* 화면을 다시 받아오는 간격.
    수업 변경은 컴시간 담당자가 넣으므로, 등교 시간대에는 더 자주 받아옵니다. */
@@ -1227,7 +1272,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const dayCache = {};      // 날짜별로 받아온 응답
 const prefetching = {};   // 미리 받는 중인 날짜
 const inflight = {};      // 지금 받고 있는 날짜 → 그 요청 (같은 날짜를 두 번 묻지 않게)
-let MEAL_DETAIL = { nutrition:[], origin:[] };   // 영양 · 원산지 창에 보여 줄 내용
+let MEAL_DETAIL = { nutri:null, kcal:'', origin:[] };   // 영양 · 원산지 창에 보여 줄 내용
 let loadSeq = 0, prefetchTimer = null;
 
 /* 1.35를 넘기면 급식·주간 시간표 칸이 눌리므로 여기까지만 확대합니다 */
@@ -2231,10 +2276,8 @@ function renderMeal(){
     ? '<button type="button" class="meal-more" id="mealMore">영양 · 원산지<' + '/button>' : '';
   title.innerHTML = ICON.meal + '<span>' + mealLabel + '<' + '/span>'
     + (kcal ? '<span class="kcal">' + esc(kcal) + '<' + '/span>' : '') + detail;
-  MEAL_DETAIL = {
-    nutrition:(lunch.nutrition || []).map(function(x){ return [x.name, x.value + (x.unit || '')]; }),
-    origin:parseOrigin(originNote)
-  };
+  const nutri = nutritionModel(lunch.nutrition);
+  MEAL_DETAIL = { nutri:nutri, kcal:kcal, origin:parseOrigin(originNote) };
 
   // 메뉴가 MAX_MEAL보다 많으면 예전에는 조용히 사라졌습니다. 이제 몇 개가
   // 더 있는지 알려 줍니다.
@@ -2251,8 +2294,8 @@ function renderMeal(){
   if (hidden > 0) items += '<li class="more">외 ' + hidden + '개<' + '/li>';
 
   const allergyNote   = allergyLegend(dishes);
-  // 3대 영양소(탄수화물·단백질·지방)는 창을 열지 않아도 보이게 알레르기 바로 위에 한 줄로 둔다
-  const macroNote     = formatMacroNote(lunch.nutrition);
+  // 탄수화물·단백질·지방·기타 비율 막대 — 창을 열지 않아도 보이게 알레르기 바로 위에 둔다
+  const nutriRow      = nutri ? nutriCardHtml(nutri) : '';
 
   // 사진이 없으면 빈 상자를 두지 않고 그 자리를 메뉴에 준다
   const photoUrl = (DATA.photo && DATA.photo.ok && DATA.photo.value) ? DATA.photo.value : '';
@@ -2265,7 +2308,7 @@ function renderMeal(){
 
   const html = '<div class="body">'
     +   '<div class="top' + (photoUrl ? '' : ' nophoto') + '"><ul>' + items + '<' + '/ul>' + photo + '<' + '/div>'
-    +   (macroNote ? '<div class="info macro"><b class="label">영양<' + '/b><span>' + esc(macroNote) + '<' + '/span><' + '/div>' : '')
+    +   nutriRow
     +   infoRow('allergy',   '알레르기', allergyNote)
     + '<' + '/div>';
 
@@ -2333,13 +2376,86 @@ function allergyLegend(dishes){
   if (!keys.length) return '';
   return keys.map(function(k){ return k + ' ' + ALLERGY_NAMES[k]; }).join(' · ');
 }
-/** 나이스 영양정보에서 탄수화물·단백질·지방만 골라 '탄수화물 162.9g · 단백질 31.7g · 지방 24.1g' */
-function formatMacroNote(list){
-  if (!list || !list.length) return '';
-  return ['탄수화물', '단백질', '지방'].map(function(name){
-    const hit = list.find(function(x){ return String(x.name || '').indexOf(name) === 0; });
-    return hit ? name + ' ' + hit.value + (hit.unit || '') : '';
-  }).filter(Boolean).join(' · ');
+/* ── 영양 그래프 ──────────────────────────────────────────
+   나이스 영양정보를 그래프로 쓰기 좋게 정리합니다.
+   · 탄수화물·단백질·지방은 g 그대로
+   · 나머지(비타민·무기질)는 mg·㎍ 단위라 g으로 바꿔 '기타'로 묶습니다
+   · 열량 비율은 탄수화물·단백질 1g = 4kcal, 지방 1g = 9kcal 로 계산합니다 */
+const MACROS = [
+  { key:'carb', name:'탄수화물', kcal:4 },
+  { key:'prot', name:'단백질',   kcal:4 },
+  { key:'fat',  name:'지방',     kcal:9 }
+];
+
+/** 단위를 g으로 — 모르는 단위면 null */
+function toGram(value, unit){
+  const v = parseFloat(String(value).replace(/,/g, ''));
+  if (!isFinite(v)) return null;
+  const u = String(unit || '').replace(/\s/g, '').toLowerCase();
+  if (u === 'g') return v;
+  if (u === 'mg') return v / 1000;
+  if (/^(㎍|μg|µg|ug|mcg|r\.?e\.?|re)$/.test(u)) return v / 1e6;   // 비타민A(R.E)는 ㎍ 단위
+  return null;
+}
+
+/** 비율 글자 — 1% 이상은 정수, 그 아래는 소수 한 자리 */
+function pctText(p){
+  if (p >= 1) return Math.round(p) + '%';
+  if (p > 0) return (Math.round(p * 10) / 10 || 0.1) + '%';
+  return '0%';
+}
+function gramText(g){
+  return (g >= 10 ? Math.round(g * 10) / 10 : Math.round(g * 100) / 100) + 'g';
+}
+
+function nutritionModel(list){
+  if (!list || !list.length) return null;
+  const macros = MACROS.map(function(m){
+    const hit = list.find(function(x){ return String(x.name || '').indexOf(m.name) === 0; });
+    return { key:m.key, name:m.name, kcal:m.kcal, g: hit ? (toGram(hit.value, hit.unit) || 0) : 0 };
+  });
+  if (!macros.some(function(m){ return m.g > 0; })) return null;
+
+  const micros = list.filter(function(x){
+    return !MACROS.some(function(m){ return String(x.name || '').indexOf(m.name) === 0; });
+  }).map(function(x){
+    return { name:x.name, value:x.value, unit:x.unit || '', g:toGram(x.value, x.unit) };
+  });
+  const etcG = micros.reduce(function(s, x){ return s + (x.g || 0); }, 0);
+
+  const parts = macros.concat(etcG > 0 ? [{ key:'etc', name:'기타', g:etcG }] : []);
+  const total = parts.reduce(function(s, p){ return s + p.g; }, 0);
+  parts.forEach(function(p){ p.pct = total ? p.g / total * 100 : 0; });
+
+  const energy = macros.map(function(m){ return { key:m.key, name:m.name, kcal:m.g * m.kcal }; });
+  const eTotal = energy.reduce(function(s, e){ return s + e.kcal; }, 0);
+  energy.forEach(function(e){ e.pct = eTotal ? e.kcal / eTotal * 100 : 0; });
+
+  return { parts:parts, energy:energy, micros:micros, total:total };
+}
+
+/** 가로로 쌓은 막대 — 왼쪽부터 차오르며 나타난다 */
+function stackBar(list, cls){
+  return '<div class="nbar ' + (cls || '') + '" role="img" aria-label="'
+    + esc(list.map(function(p){ return p.name + ' ' + pctText(p.pct); }).join(', ')) + '">'
+    + list.map(function(p){
+        return '<i class="n-' + p.key + '" style="flex-basis:' + p.pct.toFixed(2) + '%"><' + '/i>';
+      }).join('')
+    + '<' + '/div>';
+}
+
+/** 급식 칸 안 : 막대 한 줄 + 범례 한 줄 */
+function nutriCardHtml(n){
+  return '<div class="info nutri">'
+    +   '<b class="label">영양<' + '/b>'
+    +   '<div class="nbox">'
+    +     stackBar(n.parts)
+    +     '<div class="nlegend">' + n.parts.map(function(p){
+            return '<span class="n-' + p.key + '"><b>' + p.name + '<' + '/b> ' + gramText(p.g)
+                 + ' <em>' + pctText(p.pct) + '<' + '/em><' + '/span>';
+          }).join('') + '<' + '/div>'
+    +   '<' + '/div>'
+    + '<' + '/div>';
 }
 function formatNutritionNote(list){
   if (!list || !list.length) return '';
@@ -2378,16 +2494,78 @@ function parseOrigin(text){
   return out;
 }
 
+/** 범례 표 — 색 점 · 이름 · 값 · 비율 */
+function legendRows(list, valueOf){
+  return '<ul class="nrows">' + list.map(function(p){
+    return '<li class="n-' + p.key + '"><span class="dot"><' + '/span><b>' + esc(p.name) + '<' + '/b>'
+         + '<span class="v">' + esc(valueOf(p)) + '<' + '/span><em>' + pctText(p.pct) + '<' + '/em><' + '/li>';
+  }).join('') + '<' + '/ul>';
+}
+
+/** 영양 쪽 : 무게 비율 · 열량 비율 · 비타민·무기질 */
+function nutritionDetailHtml(n, kcal){
+  if (!n) return '';
+  const micros = n.micros.length
+    ? '<h4>비타민 · 무기질 <small>(위 \'기타\'에 들어 있는 것)<' + '/small><' + '/h4><div class="ntiles">'
+      + n.micros.map(function(x){
+          return '<div><span>' + esc(x.name) + '<' + '/span><b>' + esc(x.value) + '<small>'
+               + esc(x.unit) + '<' + '/small><' + '/b><' + '/div>';
+        }).join('') + '<' + '/div>'
+    : '';
+  return '<section class="dsec">'
+    + '<h3>영양 정보' + (kcal ? ' <span class="big">' + esc(kcal) + '<' + '/span>' : '') + '<' + '/h3>'
+    + '<h4>무게 비율 <small>(g 기준)<' + '/small><' + '/h4>'
+    + stackBar(n.parts, 'lg')
+    + legendRows(n.parts, function(p){ return gramText(p.g); })
+    + '<h4>열량 비율 <small>(탄수화물·단백질 1g=4kcal, 지방 1g=9kcal)<' + '/small><' + '/h4>'
+    + stackBar(n.energy, 'lg')
+    + legendRows(n.energy, function(p){ return Math.round(p.kcal) + 'kcal'; })
+    + micros
+    + '<' + '/section>';
+}
+
+/** 원산지 쪽 : 나라별 비율 막대 + 나라별 묶음 */
+function originDetailHtml(list){
+  if (!list.length) return '';
+  const groups = [];
+  list.forEach(function(r){
+    let item = r[0], where = r[1];
+    // '콩 가공품 : 두부:미국,캐나다,호주' 처럼 품목이 값 안에 들어온 경우를 풀어 준다
+    const inner = where.match(/^([^:]+):(.+)$/);
+    if (inner){ item += ' (' + inner[1] + ')'; where = inner[2]; }
+    const detail = where.match(/\((.*)\)/);
+    if (detail){ item += ' (' + detail[1] + ')'; where = where.replace(/\s*\(.*\)/, ''); }
+    let g = groups.find(function(x){ return x.name === where; });
+    if (!g){ g = { name:where, items:[] }; groups.push(g); }
+    g.items.push(item);
+  });
+  // 국내산을 맨 앞에, 나머지는 많은 순
+  groups.sort(function(a, b){
+    if (a.name === '국내산') return -1;
+    if (b.name === '국내산') return 1;
+    return b.items.length - a.items.length;
+  });
+  const keys = ['o1', 'o2', 'o3', 'o4', 'o5'];
+  groups.forEach(function(g, i){
+    g.key = keys[Math.min(i, keys.length - 1)];
+    g.pct = g.items.length / list.length * 100;
+  });
+  return '<section class="dsec">'
+    + '<h3>원산지 <span class="big">' + list.length + '개 품목<' + '/span><' + '/h3>'
+    + stackBar(groups, 'lg')
+    + legendRows(groups, function(g){ return g.items.length + '개'; })
+    + groups.map(function(g){
+        return '<div class="ogroup n-' + g.key + '"><h4><span class="dot"><' + '/span>' + esc(g.name) + '<' + '/h4>'
+             + '<div class="chips">' + g.items.map(function(x){ return '<span>' + esc(x) + '<' + '/span>'; }).join('')
+             + '<' + '/div><' + '/div>';
+      }).join('')
+    + '<' + '/section>';
+}
+
 function openMealDetail(){
   hideTip();
-  const table = function(title, list){
-    if (!list.length) return '';
-    return '<section><h3>' + title + '<' + '/h3><dl>' + list.map(function(r){
-      return '<dt>' + esc(r[0]) + '<' + '/dt><dd>' + esc(r[1]) + '<' + '/dd>';
-    }).join('') + '<' + '/dl><' + '/section>';
-  };
   document.getElementById('mealDetailBody').innerHTML =
-    (table('영양 정보', MEAL_DETAIL.nutrition) + table('원산지', MEAL_DETAIL.origin))
+    (nutritionDetailHtml(MEAL_DETAIL.nutri, MEAL_DETAIL.kcal) + originDetailHtml(MEAL_DETAIL.origin || []))
     || '<p>정보가 없습니다<' + '/p>';
   const modal = document.getElementById('mealDetail');
   modal.classList.add('show');

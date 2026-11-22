@@ -14,7 +14,7 @@
  *   번호가 그대로면 교실 기기가 옛 화면을 계속 쓸 수 있습니다.
  */
 
-const CACHE = 'todayclass-v23';
+const CACHE = 'todayclass-v24';
 
 /* 앱을 켜는 데 꼭 필요한 것들 */
 const SHELL = [
@@ -34,8 +34,10 @@ const hostMatches = (url, list) => list.some(h => url.hostname === h || url.host
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    // 하나가 없어도 나머지는 받아 두도록 한 장씩 받는다
-    await Promise.all(SHELL.map(path => cache.add(path).catch(() => {})));
+    // 하나가 없어도 나머지는 받아 두도록 한 장씩 받는다.
+    // cache:'reload' — 브라우저가 10분간 들고 있는 옛 페이지가 아니라 서버의 새 페이지를 받는다.
+    // (이게 없으면 새 판을 올려도 새 저장소에 옛 화면이 담기는 일이 있었다)
+    await Promise.all(SHELL.map(path => cache.add(new Request(path, { cache:'reload' })).catch(() => {})));
     await self.skipWaiting();
   })());
 });
@@ -98,7 +100,8 @@ async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE);
   const hit = await cache.match(request);
 
-  const fresh = fetch(request).then(response => {
+  // cache:'no-cache' — 브라우저 캐시를 그대로 믿지 않고 서버에 '바뀌었나' 물어본 뒤 받는다
+  const fresh = fetch(request.url, { cache:'no-cache', credentials:'same-origin' }).then(response => {
     if (response && response.ok) cache.put(request, response.clone());
     return response;
   }).catch(() => null);
