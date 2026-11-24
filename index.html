@@ -644,11 +644,11 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 .mealcard li::before{ content:''; width:.3rem; height:.3rem; border-radius:50%;
   background:var(--meal); flex:0 0 auto; transform:translateY(-.28em); }
 /* 급식 사진은 4:3이므로 칸도 4:3으로 두고, 잘라내지 않고 전체를 담습니다.
-   4:3을 절반 폭에 그대로 넣으면 세로가 먼저 넘치므로 높이로 묶어 둡니다. */
+   높이를 낮춰 제목·알레르기가 잘리지 않게 합니다. */
 .mealcard .shotbox{
   position:relative;
-  flex:0 0 auto; width:auto; min-width:0; align-self:center;
-  aspect-ratio:4 / 3; height:12.2rem; min-height:0; max-width:45%;
+  flex:0 0 auto; width:auto; min-width:0; align-self:flex-start;
+  aspect-ratio:4 / 3; height:9.2rem; min-height:0; max-width:38%;
   border-radius:.55rem;
   background:var(--tone); border:var(--bw) solid var(--line); overflow:hidden;
   display:flex; align-items:center; justify-content:center;
@@ -658,10 +658,10 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
   text-align:center; padding:.6rem; line-height:1.35; }
 .mealcard .kcal{ margin-left:.35rem; font-size:1.05rem; font-weight:800;
   color:var(--soft); letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
-/* 영양 · 원산지 : 작은 글씨 두 줄 대신 눌러서 크게 보는 창 */
-.mealcard .meal-more{ margin-left:auto; padding:.18rem .6rem; border:var(--bw) solid var(--line);
+/* 영양 · 원산지 : 칼로리 바로 옆 */
+.mealcard .meal-more{ margin-left:.35rem; padding:.14rem .5rem; border:var(--bw) solid var(--line);
   border-radius:.35rem; background:var(--chip); color:var(--chip-ink); font:inherit;
-  font-size:.85rem; font-weight:800; cursor:pointer; white-space:nowrap; }
+  font-size:.8rem; font-weight:800; cursor:pointer; white-space:nowrap; }
 .mealcard .meal-more:hover,.mealcard .meal-more:focus-visible{ border-color:var(--meal); color:var(--meal); outline:none; }
 /* 메뉴 이름이 알레르기 번호 때문에 두 줄로 쪼개지지 않게 */
 .mealcard li{ white-space:nowrap; }
@@ -884,53 +884,55 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 }
 .cal-month .empty{ text-align:center; padding:2rem 1rem; }
 
-/* ── 영양 · 원산지 창 (학사일정 창의 틀을 같이 씁니다) ── */
-#mealDetail{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; padding:1.2rem; }
+/* ── 영양 · 원산지 창 (학사일정 창의 틀을 같이 씁니다) ──
+   스크롤 없이 한눈에 보이도록 도넛·여백·글자 크기를 줄입니다. */
+#mealDetail{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; padding:1rem; }
 #mealDetail.show{ display:flex; }
-.meal-dialog{ width:min(64rem, 100%); max-height:min(92vh, 48rem); }
+.meal-dialog{ width:min(56rem, 100%); max-height:min(88vh, 36rem); }
 .meal-dialog h2{ text-align:left !important; padding-left:.3rem; }
-#mealDetailBody{ display:grid; grid-template-columns:1fr 1fr; gap:1.8rem; align-items:start; }
+.meal-dialog .cal-month{ overflow:hidden; padding:.55rem .85rem .7rem; }
+#mealDetailBody{ display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; align-items:start; }
 #mealDetailBody .dsec{ min-width:0; }
-#mealDetailBody h3{ display:flex; align-items:baseline; gap:.6rem; font-size:1.3rem; font-weight:900;
-  color:var(--title); margin-bottom:.4rem; }
-#mealDetailBody h3 .big{ font-size:1.05rem; color:var(--soft); font-weight:800; }
-#mealDetailBody h4{ margin-top:.8rem; font-size:1rem; font-weight:900; color:var(--ink); }
-#mealDetailBody h4 small{ font-size:.8rem; font-weight:700; color:var(--soft); }
+#mealDetailBody h3{ display:flex; align-items:baseline; gap:.45rem; font-size:1.1rem; font-weight:900;
+  color:var(--title); margin-bottom:.2rem; }
+#mealDetailBody h3 .big{ font-size:.92rem; color:var(--soft); font-weight:800; }
+#mealDetailBody h4{ margin-top:.45rem; font-size:.88rem; font-weight:900; color:var(--ink); }
+#mealDetailBody h4 small{ font-size:.72rem; font-weight:700; color:var(--soft); }
 /* 범례 표 : ● 이름 ··· 값 비율 */
-#mealDetailBody .nrows{ list-style:none; display:grid; gap:.2rem; }
-#mealDetailBody .nrows li{ display:grid; grid-template-columns:auto 1fr auto 3.6rem; align-items:center; gap:.5rem;
-  font-size:1.02rem; font-weight:800; font-variant-numeric:tabular-nums; }
+#mealDetailBody .nrows{ list-style:none; display:grid; gap:.08rem; }
+#mealDetailBody .nrows li{ display:grid; grid-template-columns:auto 1fr auto 3.2rem; align-items:center; gap:.35rem;
+  font-size:.88rem; font-weight:800; font-variant-numeric:tabular-nums; }
 #mealDetailBody .nrows b{ color:var(--n); font-weight:900; }
 #mealDetailBody .nrows .v{ color:var(--ink); }
 #mealDetailBody .nrows em{ font-style:normal; text-align:right; color:var(--soft); }
-#mealDetailBody .dot{ display:inline-block; width:.75rem; height:.75rem; border-radius:.2rem; background:var(--n); }
+#mealDetailBody .dot{ display:inline-block; width:.65rem; height:.65rem; border-radius:.18rem; background:var(--n); }
 /* 원형(도넛) 그래프 : 왼쪽 원 + 오른쪽 범례 */
-#mealDetailBody .donut{ display:grid; grid-template-columns:8.5rem minmax(0, 1fr); align-items:center; gap:1rem; margin:.4rem 0 .2rem; }
-#mealDetailBody .ring{ position:relative; width:8.5rem; height:8.5rem; }
+#mealDetailBody .donut{ display:grid; grid-template-columns:6.2rem minmax(0, 1fr); align-items:center; gap:.65rem; margin:.2rem 0 .08rem; }
+#mealDetailBody .ring{ position:relative; width:6.2rem; height:6.2rem; }
 #mealDetailBody .ring svg{ width:100%; height:100%; display:block; }
 #mealDetailBody .ring circle{ fill:none; stroke-width:6.5; }
 #mealDetailBody .ring .track{ stroke:var(--tone); }
 #mealDetailBody .ring .arc{ stroke:var(--n); transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1); }
 #mealDetailBody .ring .mid{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
   justify-content:center; line-height:1.1; text-align:center; }
-#mealDetailBody .ring .mid b{ font-size:1.2rem; font-weight:900; color:var(--ink); font-variant-numeric:tabular-nums; }
-#mealDetailBody .ring .mid small{ font-size:.75rem; font-weight:800; color:var(--soft); }
+#mealDetailBody .ring .mid b{ font-size:1rem; font-weight:900; color:var(--ink); font-variant-numeric:tabular-nums; }
+#mealDetailBody .ring .mid small{ font-size:.68rem; font-weight:800; color:var(--soft); }
 @media (prefers-reduced-motion:reduce){ #mealDetailBody .ring .arc{ transition:none; } }
 /* 비타민 · 무기질 타일 */
-#mealDetailBody .ntiles{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.4rem; margin-top:.4rem; }
-#mealDetailBody .ntiles div{ padding:.45rem .55rem; border-radius:.45rem; background:var(--tone);
-  border:var(--bw) solid var(--line); display:flex; flex-direction:column; gap:.1rem; }
-#mealDetailBody .ntiles span{ font-size:.82rem; font-weight:800; color:var(--soft); }
-#mealDetailBody .ntiles b{ font-size:1.15rem; font-weight:900; color:var(--ink); font-variant-numeric:tabular-nums; }
-#mealDetailBody .ntiles small{ margin-left:.15rem; font-size:.75rem; color:var(--soft); }
+#mealDetailBody .ntiles{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.28rem; margin-top:.25rem; }
+#mealDetailBody .ntiles div{ padding:.28rem .4rem; border-radius:.4rem; background:var(--tone);
+  border:var(--bw) solid var(--line); display:flex; flex-direction:column; gap:.04rem; }
+#mealDetailBody .ntiles span{ font-size:.72rem; font-weight:800; color:var(--soft); }
+#mealDetailBody .ntiles b{ font-size:.95rem; font-weight:900; color:var(--ink); font-variant-numeric:tabular-nums; }
+#mealDetailBody .ntiles small{ margin-left:.12rem; font-size:.68rem; color:var(--soft); }
 /* 원산지 묶음 */
-#mealDetailBody .ogroup{ margin-top:.6rem; }
-#mealDetailBody .ogroup h4{ display:flex; align-items:center; gap:.4rem; margin:0 0 .3rem; color:var(--n); }
-#mealDetailBody .chips{ display:flex; flex-wrap:wrap; gap:.3rem; }
-#mealDetailBody .chips span{ padding:.18rem .55rem; border-radius:1rem; font-size:.92rem; font-weight:800;
+#mealDetailBody .ogroup{ margin-top:.35rem; }
+#mealDetailBody .ogroup h4{ display:flex; align-items:center; gap:.35rem; margin:0 0 .18rem; color:var(--n); }
+#mealDetailBody .chips{ display:flex; flex-wrap:wrap; gap:.22rem; }
+#mealDetailBody .chips span{ padding:.1rem .42rem; border-radius:1rem; font-size:.8rem; font-weight:800;
   color:var(--ink); background:color-mix(in srgb, var(--n) 14%, var(--card));
   border:var(--bw) solid color-mix(in srgb, var(--n) 35%, var(--line)); }
-@media(max-aspect-ratio:1/1){ #mealDetailBody{ grid-template-columns:1fr; } }
+@media(max-aspect-ratio:1/1){ #mealDetailBody{ grid-template-columns:1fr; } .meal-dialog .cal-month{ overflow:auto; } }
 
 @media (prefers-reduced-motion:reduce){
   .slot,.slot .bar > i{ transition:none; }
