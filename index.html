@@ -925,14 +925,23 @@ body.idle #themeWrap{ opacity:0; pointer-events:none; }   /* 수업 중에는 �
 #mealDetailBody .ntiles span{ font-size:.72rem; font-weight:800; color:var(--soft); }
 #mealDetailBody .ntiles b{ font-size:.95rem; font-weight:900; color:var(--ink); font-variant-numeric:tabular-nums; }
 #mealDetailBody .ntiles small{ margin-left:.12rem; font-size:.68rem; color:var(--soft); }
-/* 원산지 묶음 */
-#mealDetailBody .ogroup{ margin-top:.35rem; }
+/* 원산지 묶음 : 오른쪽 빈 공간을 쓰도록 2단으로 흐르게 */
+#mealDetailBody .ogroups{
+  column-count:2; column-gap:.75rem; margin-top:.3rem;
+}
+#mealDetailBody .ogroup{
+  margin:0 0 .4rem; break-inside:avoid; -webkit-column-break-inside:avoid; page-break-inside:avoid;
+}
 #mealDetailBody .ogroup h4{ display:flex; align-items:center; gap:.35rem; margin:0 0 .18rem; color:var(--n); }
 #mealDetailBody .chips{ display:flex; flex-wrap:wrap; gap:.22rem; }
 #mealDetailBody .chips span{ padding:.1rem .42rem; border-radius:1rem; font-size:.8rem; font-weight:800;
   color:var(--ink); background:color-mix(in srgb, var(--n) 14%, var(--card));
   border:var(--bw) solid color-mix(in srgb, var(--n) 35%, var(--line)); }
-@media(max-aspect-ratio:1/1){ #mealDetailBody{ grid-template-columns:1fr; } .meal-dialog .cal-month{ overflow:auto; } }
+@media(max-aspect-ratio:1/1){
+  #mealDetailBody{ grid-template-columns:1fr; }
+  #mealDetailBody .ogroups{ column-count:2; }
+  .meal-dialog .cal-month{ overflow:auto; }
+}
 
 @media (prefers-reduced-motion:reduce){
   .slot,.slot .bar > i{ transition:none; }
@@ -2761,11 +2770,13 @@ function originDetailHtml(list){
   return '<section class="dsec">'
     + '<h3>원산지 <span class="big">' + list.length + '개 품목<' + '/span><' + '/h3>'
     + donutChart(groups, String(list.length), '품목', function(g){ return g.items.length + '개'; })
+    + '<div class="ogroups">'
     + groups.map(function(g){
         return '<div class="ogroup n-' + g.key + '"><h4><span class="dot"><' + '/span>' + esc(g.name) + '<' + '/h4>'
              + '<div class="chips">' + g.items.map(function(x){ return '<span>' + esc(x) + '<' + '/span>'; }).join('')
              + '<' + '/div><' + '/div>';
       }).join('')
+    + '<' + '/div>'
     + '<' + '/section>';
 }
 
